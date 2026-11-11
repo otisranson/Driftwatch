@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Driftwatch — Entropy &amp; KL Divergence for Infrastructure</title>
+<style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--panel2:#1c232c;--line:#2b3440;--text:#d7dee7;--dim:#8b97a6;
+  --p:#4cc2ff;--q:#8b97a6;--accent:#ffb454;--ok:#3ddc97;--bad:#ff5c6c;--kl:#c792ea;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:30px;margin:8px 0 4px;letter-spacing:-.5px}
+h1 span{color:var(--accent)}
+h2{font-size:21px;margin:0 0 6px}
+h3{font-size:15px;margin:14px 0 6px;color:var(--accent)}
+p{margin:6px 0}
+.lead{color:var(--dim);max-width:720px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin:22px 0}
+code,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.formula{background:var(--panel2);border-left:3px solid var(--accent);padding:10px 14px;margin:10px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;overflow-x:auto;white-space:pre}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:760px){.g2,.g3{grid-template-columns:1fr}}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.card b{color:var(--accent)}
+.metrics{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.metric{flex:1 1 130px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.metric small{display:block;color:var(--dim);font-size:12px}
+.metric strong{font-size:22px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.row{display:grid;grid-template-columns:92px 1fr 1fr 70px;gap:10px;align-items:center;margin:4px 0;font-size:13px}
+.row .name{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--dim)}
+.row .contrib{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.hdr{color:var(--dim);font-size:12px}
+.sl{display:flex;align-items:center;gap:8px}
+.sl input{flex:1;min-width:0}
+.sl .pct{width:42px;text-align:right;font-family:ui-monospace,monospace;font-size:12px}
+input[type=range]{accent-color:var(--p)}
+input.q{accent-color:var(--q)}
+.bar{height:14px;background:var(--panel);border-radius:3px;overflow:hidden;position:relative}
+.bar i{display:block;height:100%}
+.bar .mk{position:absolute;top:0;width:2px;height:100%;background:var(--q)}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.on{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+canvas{width:100%;display:block;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+.status{display:inline-block;padding:3px 12px;border-radius:999px;font-weight:700;font-size:13px}
+.status.ok{background:rgba(61,220,151,.15);color:var(--ok)}
+.status.bad{background:rgba(255,92,108,.18);color:var(--bad)}
+.legend{font-size:12px;color:var(--dim);display:flex;gap:16px;flex-wrap:wrap;margin:4px 0}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:600}
+.note{color:var(--dim);font-size:13px}
+footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
+a{color:var(--p)}
+</style>
+</head>
+<body>
+<main>
+
+<h1><span>Drift</span>watch</h1>
+<p class="lead">Two numbers from information theory — <b>Shannon entropy</b> and <b>KL divergence</b> — turn raw telemetry into a signal that says <i>"the shape of your traffic just changed."</i> Everything below is interactive, runs offline, and lives in one HTML file.</p>
+
+<section>
+  <h2>1 · The two ideas</h2>
+  <div class="grid g2">
+    <div>
+      <h3>Shannon entropy — "how spread out is it?"</h3>
+      <div class="formula">H(P) = − Σ pᵢ · log₂ pᵢ        [bits]
+0 ≤ H ≤ log₂ N</div>
+      <p>Low entropy: traffic concentrated on a few values (one hot endpoint, one noisy IP, one error code). High entropy: spread evenly. <b>It tells you how much variety there is, not whether the variety is normal.</b></p>
+    </div>
+    <div>
+      <h3>KL divergence — "how different from normal?"</h3>
+      <div class="formula">D(P‖Q) = Σ pᵢ · log₂(pᵢ / qᵢ)   [bits]
+≥ 0, = 0 only when P = Q</div>
+      <p>P is what you observe now, Q is the baseline. It is the extra bits wasted when you encode live traffic with a model of "normal". <b>It is asymmetric</b> — D(P‖Q) ≠ D(Q‖P) — and blows up when P puts mass where Q says "never".</p>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:12px">
+    <div class="card"><b>Why infra teams care</b><br>Metrics like "requests/sec" miss <i>composition</i> changes. A credential-stuffing run can leave total RPS flat while the endpoint mix is wildly off.</div>
+    <div class="card"><b>What you need</b><br>A categorical field (endpoint, status, source ASN, error class, node ID), a baseline histogram, and a sliding window of recent counts.</div>
+    <div class="card"><b>Cost</b><br>O(N) per window, N = number of categories. A handful of counters per field — cheap enough to run in a sidecar or a log pipeline stage.</div>
+  </div>
+</section>
+
+<section>
+  <h2>2 · Playground: P vs Q</h2>
+  <p class="note">Five HTTP status buckets. Drag the sliders; values are normalized automatically. Blue = observed P, grey = baseline Q.</p>
+  <div class="row hdr"><span></span><span>P · observed</span><span>Q · baseline</span><span style="text-align:right">p·log₂(p/q)</span></div>
+  <div id="pg"></div>
+  <div class="btns">
+    <button data-pre="same">P = Q</button>
+    <button data-pre="spike5xx">5xx spike</button>
+    <button data-pre="allok">Everything is 200</button>
+    <button data-pre="newcode">Mass on a code Q never sees</button>
+  </div>
+  <div class="metrics">
+    <div class="metric"><small>H(P) entropy</small><strong id="pgH">–</strong></div>
+    <div class="metric"><small>H(Q) entropy</small><strong id="pgHq">–</strong></div>
+    <div class="metric"><small>D(P‖Q)</small><strong id="pgKL" style="color:var(--kl)">–</strong></div>
+    <div class="metric"><small>D(Q‖P)</small><strong id="pgKL2" style="color:var(--kl)">–</strong></div>
+  </div>
+  <p class="note" id="pgNote"></p>
+  <p class="note">Try "Everything is 200": entropy collapses <i>and</i> KL rises. Then try "Mass on a code Q never sees": D(P‖Q) explodes while D(Q‖P) stays modest — that asymmetry is why you almost always want <b>observed ‖ baseline</b>, with smoothing so a zero in Q doesn't give infinity.</p>
+</section>
+
+<section>
+  <h2>3 · Live traffic drift detector</h2>
+  <p class="note">A simulated request stream (200 ms ticks, ~40 requests each) is bucketed by endpoint. The detector keeps a 12-second sliding window, computes entropy and KL against a fixed baseline, and alerts when KL crosses your threshold. Inject an incident and watch which signal notices.</p>
+  <div class="btns" id="scen"></div>
+  <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <span>Status: <span id="lvStatus" class="status ok">NORMAL</span></span>
+    <label class="sl" style="flex:1;min-width:240px">KL alert threshold <input id="thr" type="range" min="0.02" max="1" step="0.01" value="0.15"><span class="pct" id="thrV" style="width:56px"></span></label>
+    <button id="pause">Pause</button>
+  </div>
+  <div class="metrics">
+    <div class="metric"><small>H(window)</small><strong id="lvH">–</strong></div>
+    <div class="metric"><small>H(baseline)</small><strong id="lvHb">–</strong></div>
+    <div class="metric"><small>D(window‖baseline)</small><strong id="lvKL" style="color:var(--kl)">–</strong></div>
+    <div class="metric"><small>Top contributor</small><strong id="lvTop" style="font-size:16px">–</strong></div>
+  </div>
+  <div class="legend"><span><b style="background:var(--p)"></b>entropy H (bits)</span><span><b style="background:var(--q)"></b>baseline entropy</span></div>
+  <canvas id="cH" style="height:130px"></canvas>
+  <div class="legend" style="margin-top:10px"><span><b style="background:var(--kl)"></b>KL divergence (bits)</span><span><b style="background:var(--bad)"></b>alert threshold</span></div>
+  <canvas id="cK" style="height:150px"></canvas>
+  <h3>Window vs. baseline, per endpoint</h3>
+  <div class="row hdr"><span></span><span>window (blue) · baseline tick (grey)</span><span></span><span style="text-align:right">contribution</span></div>
+  <div id="lvBars"></div>
+  <div class="card" style="margin-top:12px" id="lvExplain"></div>
+</section>
+
+<section>
+  <h2>4 · Load balancer evenness</h2>
+  <p class="note">Six backends. Set the share of traffic each receives. For a uniform target U there is a neat identity: <code>D(P‖U) = log₂N − H(P)</code>, so entropy and KL are two views of the same balance score.</p>
+  <div id="lb"></div>
+  <div class="btns">
+    <button data-lb="even">Balanced</button>
+    <button data-lb="sticky">Sticky sessions skew</button>
+    <button data-lb="fail">node-3 down (traffic piles on node-4)</button>
+    <button data-lb="hot">One hot shard</button>
+  </div>
+  <div class="metrics">
+    <div class="metric"><small>H(P) / log₂N</small><strong id="lbH">–</strong></div>
+    <div class="metric"><small>Evenness H/Hmax</small><strong id="lbE">–</strong></div>
+    <div class="metric"><small>D(P‖Uniform)</small><strong id="lbKL" style="color:var(--kl)">–</strong></div>
+    <div class="metric"><small>Effective nodes 2^H</small><strong id="lbEff">–</strong></div>
+  </div>
+  <p class="note">"Effective nodes" (perplexity, 2^H) reads as: your cluster is behaving as if it had this many equally-loaded nodes. Six nodes with a hot shard may behave like ~2.</p>
+</section>
+
+<section>
+  <h2>5 · Where this fits</h2>
+  <table>
+    <tr><th>Use case</th><th>Categorical field</th><th>Baseline Q</th><th>What you see</th></tr>
+    <tr><td>DDoS / credential stuffing</td><td>endpoint, source IP/ASN</td><td>same hour last week</td><td>H drops, KL rises, top contributor is the targeted path</td></tr>
+    <tr><td>Port scan / enumeration</td><td>destination port, URL path</td><td>rolling 24 h</td><td>H rises (spread out), KL rises on rare buckets</td></tr>
+    <tr><td>Canary / bad deploy</td><td>status class, error code</td><td>stable fleet</td><td>KL(canary‖stable) &gt; 0 before the error-rate alert fires</td></tr>
+    <tr><td>Log anomaly</td><td>log template ID (Drain-style parsing)</td><td>healthy period</td><td>Novel templates produce large KL terms</td></tr>
+    <tr><td>Config / fleet drift</td><td>package version, kernel, flag value</td><td>golden image</td><td>KL per host group points to the drifting cohort</td></tr>
+    <tr><td>Load balance health</td><td>backend / shard ID</td><td>uniform or weight vector</td><td>D(P‖U) = log₂N − H tracks skew</td></tr>
+  </table>
+  <h3>Practical notes</h3>
+  <ul class="note">
+    <li><b>Smooth your counts.</b> Use add-α (here α = 0.5) so empty buckets don't yield ∞.</li>
+    <li><b>Window size is a trade-off.</b> Tiny windows have biased entropy (it under-estimates with few samples) and noisy KL; huge windows react slowly.</li>
+    <li><b>Baselines are seasonal.</b> Keep per-hour-of-week baselines, or the daily cycle will look like drift.</li>
+    <li><b>Entropy alone is blind to <i>which</i> values.</b> Swap which endpoint is hot and H stays put; KL does not. Use H for "concentration", KL for "difference", and the per-bucket terms for "who".</li>
+    <li><b>Cardinality.</b> For high-cardinality fields (IPs, user IDs), hash into a fixed number of buckets or keep the top-K plus an "other" bin.</li>
+    <li><b>Threshold from data.</b> Replay history, record the KL distribution on healthy windows, and set the alert at a high percentile of it.</li>
+  </ul>
+</section>
+
+<footer>Driftwatch · MIT License · everything here is simulated data</footer>
+</main>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const LOG2=Math.log(2);
+const log2=x=>Math.log(x)/LOG2;
+const norm=a=>{const s=a.reduce((x,y)=>x+y,0)||1;return a.map(v=>v/s)};
+const entropy=p=>-p.reduce((s,v)=>s+(v>0?v*log2(v):0),0);
+const klTerms=(p,q)=>p.map((v,i)=>v>0?v*log2(v/q[i]):0);
+const kl=(p,q)=>klTerms(p,q).reduce((a,b)=>a+b,0);
+const f=(x,d=3)=>x.toFixed(d);
+const smooth=(c,a)=>{const n=c.reduce((x,y)=>x+y,0)+a*c.length;return c.map(v=>(v+a)/n)};
+
+/* ---------- Section 2: playground ---------- */
+const PG=["2xx","3xx","4xx","5xx","429"];
+let pgP=[80,5,10,4,1],pgQ=[88,4,6,1.9,.1];
+function bars(el,names,P,Q,onP,onQ,withContrib){
+  el.innerHTML="";
+  names.forEach((n,i)=>{
+    const r=document.createElement("div");r.className="row";
+    r.innerHTML=`<span class="name">${n}</span>
+      <div class="sl"><input type="range" min="0" max="100" step="0.5" value="${P[i]}"><span class="pct"></span></div>
+      <div class="sl"><input class="q" type="range" min="0" max="100" step="0.5" value="${Q[i]}"><span class="pct"></span></div>
+      <span class="contrib"></span>`;
+    const [a,b]=r.querySelectorAll("input");
+    a.oninput=()=>{P[i]=+a.value;onP()};b.oninput=()=>{Q[i]=+b.value;onQ()};
+    el.appendChild(r);
+  });
+}
+function pgUpdate(){
+  const p=norm(pgP.map(v=>v+1e-9)),q=norm(pgQ.map(v=>v+1e-9));
+  const rows=$("#pg").children;
+  const t=klTerms(p,q);
+  [...rows].forEach((r,i)=>{
+    const s=r.querySelectorAll(".pct");
+    s[0].textContent=(p[i]*100).toFixed(1)+"%";s[1].textContent=(q[i]*100).toFixed(1)+"%";
+    const c=r.querySelector(".contrib");c.textContent=(t[i]>=0?"+":"")+f(t[i]);
+    c.style.color=t[i]>0.02?"var(--bad)":t[i]<-0.02?"var(--ok)":"var(--dim)";
+  });
+  $("#pgH").textContent=f(entropy(p))+" b";$("#pgHq").textContent=f(entropy(q))+" b";
+  $("#pgKL").textContent=f(kl(p,q))+" b";$("#pgKL2").textContent=f(kl(q,p))+" b";
+  $("#pgNote").textContent=`Max possible entropy for ${PG.length} buckets is ${f(log2(PG.length))} bits.`;
+}
+bars($("#pg"),PG,pgP,pgQ,pgUpdate,pgUpdate);pgUpdate();
+const PRE={
+  same:()=>{pgP.splice(0,5,...pgQ)},
+  spike5xx:()=>{pgP.splice(0,5,70,4,6,19.5,.5)},
+  allok:()=>{pgP.splice(0,5,99,.4,.3,.2,.1)},
+  newcode:()=>{pgP.splice(0,5,40,2,3,2,53);pgQ.splice(0,5,88,4,6,1.9,.1)}
+};
+document.querySelectorAll("[data-pre]").forEach(b=>b.onclick=()=>{
+  PRE[b.dataset.pre]();
+  const rows=$("#pg").children;
+  [...rows].forEach((r,i)=>{const [a,c]=r.querySelectorAll("input");a.value=pgP[i];c.value=pgQ[i]});
+  pgUpdate();
+});
+
+/* ---------- Section 3: live detector ---------- */
+const EP=["/login","/search","/items","/cart","/checkout","/static","/health","/admin"];
+const BASE=norm([.06,.22,.26,.10,.04,.28,.03,.01]);
+const onehot=i=>EP.map((_,j)=>j===i?1:0);
+const UNI=EP.map(()=>1/EP.length);
+const mix=(a,b,m)=>a.map((v,i)=>(1-m)*v+m*b[i]);
+const SCEN=[
+  {id:"normal",name:"Normal",target:BASE,
+   why:"Traffic matches the baseline. KL hovers near the sampling-noise floor and entropy sits at the baseline value."},
+  {id:"stuff",name:"Credential stuffing",target:mix(BASE,onehot(0),.6),
+   why:"Most requests hit /login. Entropy <b>drops</b> (traffic concentrated) and KL jumps; /login is the top contributor. Total request rate never changed — an RPS alert would stay silent."},
+  {id:"scan",name:"Path scanner",target:mix(BASE,UNI,.5),
+   why:"A scanner sprays requests evenly, including rarely-hit /admin. Entropy rises a little, but KL reacts far more strongly because /admin and /health are far above baseline — entropy alone is a weak detector here."},
+  {id:"cache",name:"CDN/cache failure",target:norm([.06,.30,.36,.12,.05,.04,.04,.03]),
+   why:"/static collapses and the load shifts onto dynamic endpoints. Entropy barely moves (the mix is about as varied as before) but KL flags it clearly — a change of <i>which</i> values, not <i>how spread</i>."},
+  {id:"hc",name:"Health-check flood",target:mix(BASE,onehot(6),.5),
+   why:"A misconfigured probe hammers /health. Entropy drops like the stuffing case; the top contributor is what tells the two incidents apart."}
+];
+let cur=SCEN[0],dist=BASE.slice(),paused=false;
+const WIN=60,PER=40,MAXPTS=240;
+const ticks=[];            // per-tick count arrays
+const hist={H:[],K:[]};
+const Hb=entropy(BASE);
+$("#lvHb").textContent=f(Hb)+" b";
+function sc(){const b=$("#scen");SCEN.forEach(s=>{const x=document.createElement("button");x.textContent=s.name;x.onclick=()=>{cur=s;sel()};x.dataset.id=s.id;b.appendChild(x)});sel()}
+function sel(){document.querySelectorAll("#scen button").forEach(b=>b.classList.toggle("on",b.dataset.id===cur.id))}
+sc();
+function sample(d){
+  const c=new Array(d.length).fill(0);
+  for(let n=0;n<PER;n++){let r=Math.random(),i=0;while(i<d.length-1&&r>d[i]){r-=d[i];i++}c[i]++}
+  return c;
+}
+const thr=$("#thr");thr.oninput=()=>{$("#thrV").textContent=f(+thr.value,2)+" b"};thr.oninput();
+$("#pause").onclick=e=>{paused=!paused;e.target.textContent=paused?"Resume":"Pause"};
+// pre-fill so the charts start populated
+for(let i=0;i<WIN+MAXPTS/2;i++)step(true);
+function step(quiet){
+  dist=dist.map((v,i)=>v+(cur.target[i]-v)*.12);
+  ticks.push(sample(dist));if(ticks.length>WIN)ticks.shift();
+  const tot=EP.map((_,i)=>ticks.reduce((s,t)=>s+t[i],0));
+  const p=smooth(tot,.5);
+  const H=entropy(p),K=kl(p,BASE);
+  hist.H.push(H);hist.K.push(K);
+  if(hist.H.length>MAXPTS){hist.H.shift();hist.K.shift()}
+  if(quiet)return;
+  const t=klTerms(p,BASE);
+  const top=t.indexOf(Math.max(...t));
+  $("#lvH").textContent=f(H)+" b";$("#lvKL").textContent=f(K)+" b";
+  const alert=K>+thr.value,st=$("#lvStatus");
+  st.textContent=alert?"DRIFT ALERT":"NORMAL";st.className="status "+(alert?"bad":"ok");
+  $("#lvTop").textContent=alert||K>0.05?`${EP[top]} (+${f(t[top],2)})`:"—";
+  paintBars(p,t);
+  $("#lvExplain").innerHTML=`<b>${cur.name}.</b> ${cur.why}`;
+  draw($("#cH"),hist.H,{min:0,max:log2(EP.length),color:"#4cc2ff",ref:Hb,refColor:"#8b97a6",unit:"b"});
+  draw($("#cK"),hist.K,{min:0,max:Math.max(.6,...hist.K)*1.1,color:"#c792ea",ref:+thr.value,refColor:"#ff5c6c",unit:"b"});
+}
+let built=false;
+function paintBars(p,t){
+  const el=$("#lvBars");
+  if(!built){
+    el.innerHTML=EP.map(n=>`<div class="row"><span class="name">${n}</span>
+      <div class="bar"><i style="background:var(--p)"></i><span class="mk"></span></div><span></span><span class="contrib"></span></div>`).join("");
+    built=true;
+  }
+  [...el.children].forEach((r,i)=>{
+    r.querySelector("i").style.width=Math.min(100,p[i]*100/.8)+"%";
+    r.querySelector(".mk").style.left=Math.min(100,BASE[i]*100/.8)+"%";
+    const c=r.querySelector(".contrib");c.textContent=(t[i]>=0?"+":"")+f(t[i]);
+    c.style.color=t[i]>0.03?"var(--bad)":t[i]<-0.03?"var(--ok)":"var(--dim)";
+  });
+}
+function draw(cv,data,o){
+  const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*dpr;cv.height=h*dpr;
+  const g=cv.getContext("2d");g.scale(dpr,dpr);
+  const L=44,R=8,T=8,B=16,W=w-L-R,Hh=h-T-B;
+  const y=v=>T+Hh-(v-o.min)/(o.max-o.min)*Hh;
+  g.font="11px ui-monospace,monospace";g.fillStyle="#8b97a6";g.strokeStyle="#2b3440";g.lineWidth=1;
+  for(let i=0;i<=4;i++){const v=o.min+(o.max-o.min)*i/4;g.beginPath();g.moveTo(L,y(v));g.lineTo(w-R,y(v));g.stroke();g.fillText(v.toFixed(2),4,y(v)+4)}
+  g.fillText("older",L,h-3);g.textAlign="right";g.fillText("now",w-R,h-3);g.textAlign="left";
+  if(o.ref!=null){g.strokeStyle=o.refColor;g.setLineDash([5,4]);g.beginPath();g.moveTo(L,y(o.ref));g.lineTo(w-R,y(o.ref));g.stroke();g.setLineDash([])}
+  g.strokeStyle=o.color;g.lineWidth=2;g.beginPath();
+  data.forEach((v,i)=>{const x=L+W*i/(MAXPTS-1);i?g.lineTo(x,y(v)):g.moveTo(x,y(v))});g.stroke();
+}
+setInterval(()=>{if(!paused)step()},200);
+step();
+
+/* ---------- Section 4: load balancer ---------- */
+const NODES=["node-1","node-2","node-3","node-4","node-5","node-6"];
+let lbP=[1,1,1,1,1,1];
+const lb=$("#lb");
+NODES.forEach((n,i)=>{
+  const r=document.createElement("div");r.className="row";r.style.gridTemplateColumns="92px 1fr 70px";
+  r.innerHTML=`<span class="name">${n}</span><div class="sl"><input type="range" min="0" max="200" value="${lbP[i]}"></div><span class="contrib"></span>`;
+  r.querySelector("input").oninput=e=>{lbP[i]=+e.target.value;lbUpdate()};
+  lb.appendChild(r);
+});
+function lbUpdate(){
+  const p=norm(lbP.map(v=>v+1e-9)),H=entropy(p),N=NODES.length;
+  [...lb.children].forEach((r,i)=>{r.querySelector(".contrib").textContent=(p[i]*100).toFixed(1)+"%";r.querySelector("input").value=lbP[i]});
+  $("#lbH").textContent=f(H,2)+" / "+f(log2(N),2);
+  $("#lbE").textContent=(H/log2(N)*100).toFixed(0)+"%";
+  $("#lbKL").textContent=f(kl(p,UNI_N(N)))+" b";
+  $("#lbEff").textContent=f(Math.pow(2,H),2);
+}
+const UNI_N=n=>new Array(n).fill(1/n);
+const LBP={even:[100,100,100,100,100,100],sticky:[160,120,100,90,70,60],fail:[100,100,0,200,100,100],hot:[10,10,10,10,10,140]};
+document.querySelectorAll("[data-lb]").forEach(b=>b.onclick=()=>{lbP=LBP[b.dataset.lb].slice();lbUpdate()});
+lbP=LBP.even.slice();lbUpdate();
+</script>
+</body>
+</html>

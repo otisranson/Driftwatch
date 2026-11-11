@@ -415,6 +415,7 @@ cv.addEventListener("click",ev=>{
 /* ---------- orchestration ---------- */
 function paint(){S.view==="graph"?drawGraph():drawMatrix()}
 function redraw(){
+  S.hover=null;$("#det").innerHTML='<span class="note">Hover the map for details about a signal or relationship.</span>';
   fit();computeScale();computeEdges();
   paint();legend();topTable();
   $("#hint").textContent=S.view==="graph"
@@ -445,7 +446,7 @@ CAUSES.forEach(c=>{
   $("#causes").appendChild(l);
 });
 $("#topPctV").textContent=S.topPct+"%";$("#nSampV").textContent=S.N.toLocaleString();
-window.addEventListener("resize",()=>{if(M)redraw()});
+window.addEventListener("resize",()=>{if(M){fit();paint()}});
 
 simulate();BASE=M.mi.slice();layout();mark();redraw();
 $("#det").innerHTML='<span class="note">Hover the map for details about a signal or relationship.</span>';

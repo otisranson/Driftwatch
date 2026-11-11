@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Driftwatch — Signal Co-occurrence Map</title>
+<style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--panel2:#1c232c;--line:#2b3440;--text:#d7dee7;--dim:#8b97a6;
+  --p:#4cc2ff;--accent:#ffb454;--ok:#3ddc97;--bad:#ff5c6c;--kl:#c792ea;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1020px;margin:0 auto;padding:24px 16px 80px}
+nav{font-size:13px;margin-bottom:6px}
+nav a{color:var(--p);text-decoration:none}
+h1{font-size:30px;margin:8px 0 4px;letter-spacing:-.5px}
+h1 span{color:var(--accent)}
+h2{font-size:21px;margin:0 0 6px}
+h3{font-size:15px;margin:14px 0 6px;color:var(--accent)}
+p{margin:6px 0}
+.lead{color:var(--dim);max-width:780px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin:22px 0}
+code,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:13px}
+.formula{background:var(--panel2);border-left:3px solid var(--accent);padding:10px 14px;margin:10px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;overflow-x:auto;white-space:pre}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:1fr 1fr}
+@media(max-width:800px){.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.card b{color:var(--accent)}
+.note{color:var(--dim);font-size:13px}
+ul.note{padding-left:20px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.on{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+input[type=range]{accent-color:var(--p)}
+label.chk{display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.sl{display:flex;align-items:center;gap:8px;font-size:13px}
+canvas{width:100%;display:block;background:#11161d;border:1px solid var(--line);border-radius:8px}
+.legend{margin:12px 0;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.legend .bar{height:16px;border-radius:4px;border:1px solid var(--line);margin:6px 0 2px}
+.legend .ticks{display:flex;justify-content:space-between;font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--dim)}
+.legend .ttl{font-weight:600}
+.two{display:grid;grid-template-columns:1.8fr 1fr;gap:14px;align-items:start}
+@media(max-width:860px){.two{grid-template-columns:1fr}}
+.det{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13px;min-height:190px}
+.det table{border-collapse:collapse;width:100%;margin-top:6px}
+.det td,.det th{padding:3px 6px;text-align:left;font-size:12.5px;border-bottom:1px solid var(--line)}
+.det td.n,.det th.n{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace}
+.det tr.hi td{color:var(--accent);font-weight:600}
+.causes{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px 14px;margin:8px 0}
+table.top{border-collapse:collapse;width:100%;font-size:12.5px}
+table.top th,table.top td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
+table.top th{color:var(--dim);font-weight:600}
+table.top td.n,table.top th.n{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace}
+footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
+</style>
+</head>
+<body>
+<main>
+<nav><a href="index.html">← Ticket drift detector</a></nav>
+<h1><span>Drift</span>watch · signal map</h1>
+<p class="lead">Tickets don't arrive alone. When a rack loses power you get <i>unreachable</i>, <i>PSU lost</i> and <i>fan critical</i> together; a failing drive brings <i>SMART warning</i> and <i>backup failed</i>. This page treats each normalized ticket subject as a <b>signal</b>, measures which signals co-occur on the same host in the same hour, and paints the strength of each relationship onto a graph — like elevation on a topographic map.</p>
+
+<section>
+  <h2>1 · Three measures, one picture</h2>
+  <p class="note">For two signals X and Y, define each as a binary variable per <b>host-hour</b>: “did a ticket with this template fire?”. Then:</p>
+  <div class="grid g3">
+    <div class="card"><b>Joint entropy H(X,Y)</b>
+      <div class="formula">H(X,Y) = −Σ p(x,y)·log₂ p(x,y)</div>
+      Total uncertainty of the pair. Large when both signals are common and active, <i>even if they're unrelated</i>. Good for "what is busy"; bad for "what is related".</div>
+    <div class="card"><b>Conditional entropy H(Y|X)</b>
+      <div class="formula">H(Y|X) = H(X,Y) − H(X)</div>
+      Uncertainty left in Y once you know X. <b>Asymmetric</b>: the matrix view shows every ordered pair. Low = X nearly determines Y. The “remaining” variant divides by H(Y): 1.0 means X tells you nothing.</div>
+    <div class="card"><b>Mutual information I(X;Y)</b>
+      <div class="formula">I(X;Y) = H(X)+H(Y) − H(X,Y)</div>
+      Shared information: how many bits knowing one signal saves on the other. Zero for independent signals, symmetric, and the cleanest "these belong together" score.</div>
+  </div>
+  <p class="note" style="margin-top:10px">Why it matters for drift: when a <i>new</i> underlying cause appears, new edges light up between signals that never co-occurred before. Switch to <b>Δ MI vs baseline</b> after enabling the NIC-firmware cause below.</p>
+</section>
+
+<section>
+  <h2>2 · The map</h2>
+  <p class="note">Simulated fleet sample: each unit is one host-hour. Hidden <i>causes</i> (power loss, disk filling, thermal…) fire at random and trigger sets of signals, on top of independent background noise. The graph never sees the causes: it recovers structure purely from co-occurrence.</p>
+
+  <div class="btns" id="metricBtns"></div>
+  <div class="btns">
+    <span class="note">View:</span>
+    <button id="vGraph" class="on">Graph</button><button id="vMatrix">Matrix</button>
+    <label class="chk"><input type="checkbox" id="topo" checked> Topographic field</label>
+    <label class="sl">Edges shown (top %) <input id="topPct" type="range" min="3" max="100" value="18"><span id="topPctV" class="mono"></span></label>
+  </div>
+
+  <div class="legend">
+    <div class="ttl" id="lgTitle"></div>
+    <div class="bar" id="lgBar"></div>
+    <div class="ticks"><span id="lgLo"></span><span id="lgMid"></span><span id="lgHi"></span></div>
+    <div class="note" id="lgDesc" style="margin-top:6px"></div>
+  </div>
+
+  <div class="two">
+    <div>
+      <canvas id="cv" style="height:560px"></canvas>
+      <p class="note" id="hint" style="margin-top:6px"></p>
+    </div>
+    <div>
+      <div class="det" id="det"></div>
+    </div>
+  </div>
+
+  <h3>Strongest relationships (current measure)</h3>
+  <div id="topTbl"></div>
+</section>
+
+<section>
+  <h2>3 · Experiment</h2>
+  <p class="note">Toggle the hidden causes and watch edges appear and vanish. Shrink the sample and see spurious edges appear from sampling noise — the same reason you calibrate thresholds on healthy history.</p>
+  <div class="causes" id="causes"></div>
+  <div class="btns">
+    <label class="sl">Host-hours sampled <input id="nSamp" type="range" min="2000" max="100000" step="2000" value="40000"><span id="nSampV" class="mono"></span></label>
+    <button id="resample">Resample (new random seed)</button>
+    <button id="setBase">Set baseline = current</button>
+    <button id="inject">Inject NIC-firmware cause → show Δ MI</button>
+  </div>
+</section>
+
+<section>
+  <h2>4 · Reading it</h2>
+  <ul class="note">
+    <li><b>Cluster = shared cause.</b> Tightly linked signals (e.g. unreachable · PSU · fan) usually trace to one physical or software cause. Open a ticket for the cause, not for each signal.</li>
+    <li><b>Joint vs mutual.</b> Pick “Joint entropy” and the busiest signals glow regardless of relatedness; switch to “Mutual information” and only genuinely coupled pairs remain. That contrast is the whole point of subtracting H(X)+H(Y).</li>
+    <li><b>Asymmetry shows direction of explanation.</b> In the matrix, if <i>backup-fail</i> given <i>disk-full</i> is much lower than the reverse, disk-full is a strong predictor of backup failures but not every failed backup is a disk problem.</li>
+    <li><b>Topographic field.</b> Colour is summed edge influence blended smoothly across the plane, so peaks sit where several strong edges meet — the hubs worth investigating first. Contour lines mark equal elevation bands.</li>
+    <li><b>Unit of co-occurrence matters.</b> Host-hour finds same-machine coupling. Use rack-hour for shared-infrastructure causes, or cluster-hour for software rollouts.</li>
+  </ul>
+</section>
+<footer>Driftwatch · MIT License · all simulated data; nothing leaves your browser</footer>
+</main>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const log2=x=>Math.log(x)/Math.LN2;
+const hh=p=>p>0?-p*log2(p):0;
+const fmt=(x,d=3)=>x.toFixed(d);
+
+/* ---------- signals & hidden causes ---------- */
+const SIG=[
+ ["disk-full",.004],["unreachable",.003],["high-cpu",.003],["memory-high",.003],["smart-warning",.002],
+ ["cert-expiry",.003],["ntp-offset",.002],["psu-lost",.0008],["patch-missing",.004],["nginx-restart",.0015],
+ ["kubelet-restart",.0012],["fan-critical",.001],["ipmi-sensor",.0015],["backup-failed",.002],
+ ["kernel-panic",.0004],["nic-flapping",.002],["nic-fw-error",.0002]
+];
+const n=SIG.length,NAMES=SIG.map(s=>s[0]),IX=Object.fromEntries(NAMES.map((k,i)=>[k,i]));
+const CAUSES=[
+ {id:"power",  name:"Rack power loss",   p:.006,on:true, t:{"unreachable":.9,"psu-lost":.7,"fan-critical":.25,"ipmi-sensor":.5}},
+ {id:"disk",   name:"Disk filling up",   p:.02, on:true, t:{"disk-full":.95,"backup-failed":.6,"nginx-restart":.3,"memory-high":.15}},
+ {id:"thermal",name:"Thermal / cooling", p:.01, on:true, t:{"fan-critical":.8,"high-cpu":.6,"ipmi-sensor":.7,"kernel-panic":.1}},
+ {id:"net",    name:"Network fabric",    p:.012,on:true, t:{"nic-flapping":.85,"unreachable":.5,"ntp-offset":.4}},
+ {id:"mem",    name:"Memory leak",       p:.012,on:true, t:{"memory-high":.9,"high-cpu":.5,"kubelet-restart":.5,"nginx-restart":.3}},
+ {id:"drive",  name:"Failing drives",    p:.008,on:true, t:{"smart-warning":.9,"disk-full":.3,"backup-failed":.4}},
+ {id:"patch",  name:"Patch cycle",       p:.02, on:true, t:{"patch-missing":.9,"kubelet-restart":.15}},
+ {id:"fw",     name:"NIC firmware bug (new)",p:.015,on:false,t:{"nic-fw-error":.9,"nic-flapping":.7,"unreachable":.35,"ntp-offset":.15}}
+];
+CAUSES.forEach(c=>c.ti=Object.entries(c.t).map(([k,p])=>[IX[k],p]));
+
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ---------- state ---------- */
+const S={metric:"mi",view:"graph",topo:true,topPct:18,anchor:IX["unreachable"],N:40000,seed:7,hover:null,sel:null};
+let M=null,BASE=null,POS=[],order=[],edges=[],scale=null,fieldCv=null,matrixGeom=null;
+
+/* ---------- simulate + information measures ---------- */
+function simulate(){
+  const r=rng(S.seed),N=S.N,c1=new Float64Array(n),c11=new Float64Array(n*n),flag=new Uint8Array(n);
+  for(let u=0;u<N;u++){
+    flag.fill(0);
+    for(let i=0;i<n;i++)if(r()<SIG[i][1])flag[i]=1;
+    for(const c of CAUSES){
+      const fire=r()<c.p;
+      for(const [i,p] of c.ti){const q=r();if(fire&&c.on&&q<p)flag[i]=1}
+    }
+    let k=0;const act=[];for(let i=0;i<n;i++)if(flag[i]){act.push(i);c1[i]++}
+    for(let a=0;a<act.length;a++)for(let b=a+1;b<act.length;b++){c11[act[a]*n+act[b]]++;c11[act[b]*n+act[a]]++}
+  }
+  const mi=new Float64Array(n*n),nmi=new Float64Array(n*n),joint=new Float64Array(n*n),cond=new Float64Array(n*n),condr=new Float64Array(n*n),act=[];
+  for(let i=0;i<n;i++)act[i]=c1[i]>=5;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    const k=i*n+j;
+    if(i===j||!act[i]||!act[j]){mi[k]=nmi[k]=joint[k]=cond[k]=condr[k]=NaN;continue}
+    const info=pair(i,j,c1,c11,N);
+    mi[k]=info.I;nmi[k]=info.I/Math.min(info.Hx,info.Hy);joint[k]=info.Hxy;cond[k]=info.Hy_x;condr[k]=info.Hy_x/info.Hy;
+  }
+  M={N,c1,c11,mi,nmi,joint,cond,condr,act};
+}
+function pair(i,j,c1,c11,N){
+  const n11=c11[i*n+j],n1x=c1[i],n1y=c1[j],n10=n1x-n11,n01=n1y-n11,n00=N-n1x-n1y+n11;
+  const px=n1x/N,py=n1y/N;
+  const Hx=hh(px)+hh(1-px),Hy=hh(py)+hh(1-py);
+  const Hxy=hh(n11/N)+hh(n10/N)+hh(n01/N)+hh(n00/N);
+  return {n11,n10,n01,n00,px,py,Hx,Hy,Hxy,Hy_x:Hxy-Hx,Hx_y:Hxy-Hy,I:Math.max(0,Hx+Hy-Hxy)};
+}
+
+/* ---------- metrics ---------- */
+const METRICS={
+ mi:{name:"Mutual information I(X;Y)",unit:"bits",sym:true,get:(i,j)=>M.mi[i*n+j],
+     desc:"Bits shared by two signals. High = knowing one tells you a lot about the other. Independent signals sit near zero."},
+ nmi:{name:"Normalized MI = I / min(H(X),H(Y))",unit:"",sym:true,get:(i,j)=>M.nmi[i*n+j],
+     desc:"Fraction of the rarer signal's uncertainty explained by the other. 1.0 = one always accompanies the other. Highlights relationships between rare signals that raw MI undersells."},
+ joint:{name:"Joint entropy H(X,Y)",unit:"bits",sym:true,get:(i,j)=>M.joint[i*n+j],
+     desc:"Total uncertainty of the pair. Peaks at busy signals whether or not they are related — compare with MI to see why subtracting H(X)+H(Y) matters."},
+ cond:{name:"Conditional entropy H(Y|X)",unit:"bits",sym:false,inv:true,get:(i,j)=>M.cond[i*n+j],
+     desc:"Uncertainty left in Y after observing X (X = row/anchor, Y = column/other end). Directional. Colour is inverted: high ground = LOW remaining uncertainty = strong dependence. Dominated by how common Y is."},
+ condr:{name:"Remaining uncertainty H(Y|X) / H(Y)",unit:"",sym:false,inv:true,get:(i,j)=>M.condr[i*n+j],
+     desc:"1.0 = X tells you nothing about Y; 0 = X fully determines Y. Directional and scale-free. Colour is inverted: high ground = strong dependence."},
+ delta:{name:"Δ MI vs baseline",unit:"bits",sym:true,div:true,get:(i,j)=>M.mi[i*n+j]-BASE[i*n+j],
+     desc:"Change in mutual information since the baseline snapshot. Warm = relationship strengthened (new coupling), cool = weakened. This is what a new cause looks like."}
+};
+const METRIC_KEYS=Object.keys(METRICS);
+
+/* ---------- palettes ---------- */
+const HYPSO=[[0,"#1d4e89"],[.2,"#2a9d8f"],[.4,"#7cb342"],[.6,"#e6d96a"],[.8,"#c8863a"],[.9,"#8c4a2f"],[1,"#f4efe6"]];
+const DIV=[[0,"#2b6cb0"],[.35,"#6fb1d9"],[.5,"#e9e4d8"],[.65,"#e0a060"],[1,"#b4492b"]];
+const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function pal(stops,t){
+  t=Math.max(0,Math.min(1,t));
+  for(let k=1;k<stops.length;k++)if(t<=stops[k][0]){
+    const [t0,c0]=stops[k-1],[t1,c1]=stops[k],u=(t-t0)/(t1-t0||1),a=hex(c0),b=hex(c1);
+    return [0,1,2].map(i=>a[i]+(b[i]-a[i])*u);
+  }
+  return hex(stops[stops.length-1][1]);
+}
+const rgb=(c,a=1)=>`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const stopsFor=m=>m.div?DIV:HYPSO;
+
+/* ---------- scale, edges ---------- */
+function computeScale(){
+  const m=METRICS[S.metric];let lo=Infinity,hi=-Infinity;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    if(i===j)continue;const v=m.get(i,j);if(!Number.isFinite(v))continue;
+    if(v<lo)lo=v;if(v>hi)hi=v;
+  }
+  if(!Number.isFinite(lo)){lo=0;hi=1}
+  if(m.div){const a=Math.max(Math.abs(lo),Math.abs(hi),1e-9);lo=-a;hi=a}
+  if(hi-lo<1e-12)hi=lo+1e-6;
+  scale={lo,hi,t:v=>{let t=(v-lo)/(hi-lo);return m.inv?1-t:t},strength:v=>{const t=(v-lo)/(hi-lo);return m.div?Math.abs(v)/hi:(m.inv?1-t:t)}};
+}
+function computeEdges(){
+  const m=METRICS[S.metric],list=[];
+  const add=(i,j,a,b)=>{const v=m.get(a,b);if(!Number.isFinite(v))return;list.push({i,j,a,b,v,t:scale.t(v),s:scale.strength(v)})};
+  if(m.sym){for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)add(i,j,i,j)}
+  else{for(let k=0;k<n;k++)if(k!==S.anchor)add(S.anchor,k,S.anchor,k)}
+  list.sort((x,y)=>y.s-x.s);
+  edges=list.slice(0,Math.max(1,Math.round(list.length*S.topPct/100))).filter(e=>e.s>=.04);
+}
+
+/* ---------- layout ---------- */
+function layout(){
+  const w=new Float64Array(n*n);let mx=1e-12;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){const v=M.nmi[i*n+j];if(Number.isFinite(v)){w[i*n+j]=v;if(v>mx)mx=v}}
+  const P=[];for(let i=0;i<n;i++){const a=2*Math.PI*i/n;P.push([.5+.35*Math.cos(a),.5+.35*Math.sin(a)])}
+  for(let it=0;it<500;it++){
+    const F=P.map(()=>[0,0]),cool=1-it/500;
+    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+      let dx=P[i][0]-P[j][0],dy=P[i][1]-P[j][1],d2=dx*dx+dy*dy+1e-5,d=Math.sqrt(d2);
+      const rep=.0016/d2,att=Math.pow(w[i*n+j]/mx,.8)*d*1.6,f=rep-att;
+      dx/=d;dy/=d;F[i][0]+=dx*f;F[i][1]+=dy*f;F[j][0]-=dx*f;F[j][1]-=dy*f;
+    }
+    for(let i=0;i<n;i++){
+      F[i][0]-=(P[i][0]-.5)*.05;F[i][1]-=(P[i][1]-.5)*.05;
+      P[i][0]+=Math.max(-.02,Math.min(.02,F[i][0]*.5))*cool;P[i][1]+=Math.max(-.02,Math.min(.02,F[i][1]*.5))*cool;
+    }
+  }
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;P.forEach(p=>{x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])});
+  POS=P.map(p=>[.07+.86*(p[0]-x0)/(x1-x0||1),.09+.82*(p[1]-y0)/(y1-y0||1)]);
+  // seriation order for the matrix
+  const act=[...Array(n).keys()].filter(i=>M.act[i]);
+  let bi=act[0],bj=act[1]||act[0],bv=-1;
+  for(const i of act)for(const j of act)if(i<j&&w[i*n+j]>bv){bv=w[i*n+j];bi=i;bj=j}
+  order=[bi,bj];const left=new Set(act.filter(x=>x!==bi&&x!==bj));
+  while(left.size){let best=-1,bs=-1;for(const k of left){const s=w[order[order.length-1]*n+k];if(s>bs){bs=s;best=k}}order.push(best);left.delete(best)}
+  for(let i=0;i<n;i++)if(!M.act[i])order.push(i);
+}
+
+/* ---------- drawing helpers ---------- */
+const cv=$("#cv"),ctx=cv.getContext("2d");
+let W=0,H=0,dpr=1;
+function fit(){
+  dpr=window.devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;
+  cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+const px=p=>[p[0]*W,p[1]*H];
+function segDist(x,y,a,b){
+  const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1e-9;
+  let t=((x-a[0])*dx+(y-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));
+  const X=a[0]+t*dx,Y=a[1]+t*dy;return Math.hypot(x-X,y-Y);
+}
+function buildField(){
+  const m=METRICS[S.metric],gw=Math.max(80,Math.round(W/3)),gh=Math.max(60,Math.round(H/3));
+  fieldCv=document.createElement("canvas");fieldCv.width=gw;fieldCv.height=gh;
+  const fx=fieldCv.getContext("2d"),img=fx.createImageData(gw,gh),val=new Float32Array(gw*gh);
+  const sig=.07*W/(W/gw),segs=edges.map(e=>({a:[POS[e.i][0]*gw,POS[e.i][1]*gh],b:[POS[e.j][0]*gw,POS[e.j][1]*gh],
+      w:m.div?Math.sign(e.v)*e.s:e.s}));
+  const inv2=1/(2*sig*sig);let mx=1e-9;
+  for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
+    let v=0;
+    for(const s of segs){const d=segDist(x,y,s.a,s.b);v+=s.w*Math.exp(-d*d*inv2)}
+    val[y*gw+x]=v;const av=Math.abs(v);if(av>mx)mx=av;
+  }
+  const stops=stopsFor(m),LV=12,band=new Int16Array(gw*gh),col=[];
+  for(let k=0;k<gw*gh;k++){
+    const t=m.div?(val[k]/mx+1)/2:Math.pow(val[k]/mx,.75);
+    band[k]=Math.floor(t*LV);col[k]=pal(stops,t);
+  }
+  for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
+    const k=y*gw+x;let c=col[k];
+    const edge=(x+1<gw&&band[k+1]!==band[k])||(y+1<gh&&band[k+gw]!==band[k]);
+    const a=edge?[c[0]*.55,c[1]*.55,c[2]*.55]:c;
+    img.data[k*4]=a[0];img.data[k*4+1]=a[1];img.data[k*4+2]=a[2];img.data[k*4+3]=edge?235:150;
+  }
+  fx.putImageData(img,0,0);
+}
+function nodeR(i){return 5+34*Math.sqrt(M.c1[i]/M.N)}
+function drawGraph(){
+  const m=METRICS[S.metric],stops=stopsFor(m);
+  ctx.clearRect(0,0,W,H);ctx.fillStyle="#11161d";ctx.fillRect(0,0,W,H);
+  if(S.topo&&fieldCv){ctx.imageSmoothingEnabled=true;ctx.drawImage(fieldCv,0,0,W,H)}
+  const hov=S.hover;
+  for(const e of edges){
+    const a=px(POS[e.i]),b=px(POS[e.j]),lw=1.5+3.5*e.s;
+    ctx.lineCap="round";
+    ctx.strokeStyle="rgba(8,10,14,.75)";ctx.lineWidth=lw+2.5;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
+    ctx.strokeStyle=rgb(pal(stops,e.t),.97);ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
+    if(hov&&hov.type==="edge"&&hov.e===e){ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.setLineDash([])}
+  }
+  ctx.font="12px system-ui,sans-serif";ctx.textAlign="center";
+  for(let i=0;i<n;i++){
+    const [x,y]=px(POS[i]),r=nodeR(i),on=M.act[i];
+    ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fillStyle=on?"#0d1117":"#20262e";ctx.fill();
+    const isA=!m.sym&&i===S.anchor,isH=hov&&hov.type==="node"&&hov.i===i;
+    ctx.lineWidth=isA||isH?3:1.6;ctx.strokeStyle=isA?"#ffb454":isH?"#fff":on?"rgba(215,222,231,.85)":"#4a5360";ctx.stroke();
+    ctx.lineWidth=3;ctx.strokeStyle="rgba(13,17,23,.9)";ctx.strokeText(NAMES[i],x,y-r-5);
+    ctx.fillStyle=on?"#e8eef5":"#6b7684";ctx.fillText(NAMES[i],x,y-r-5);
+  }
+}
+function drawMatrix(){
+  const m=METRICS[S.metric],stops=stopsFor(m);
+  ctx.clearRect(0,0,W,H);ctx.fillStyle="#11161d";ctx.fillRect(0,0,W,H);
+  const left=110,top=100,cs=Math.min((W-left-10)/n,(H-top-10)/n);
+  matrixGeom={left,top,cs};
+  ctx.font="11px system-ui,sans-serif";
+  order.forEach((i,r)=>{
+    ctx.fillStyle=M.act[i]?"#c8d1dc":"#667";ctx.textAlign="right";ctx.fillText(NAMES[i],left-6,top+r*cs+cs/2+4);
+    ctx.save();ctx.translate(left+r*cs+cs/2,top-6);ctx.rotate(-Math.PI/3);ctx.textAlign="left";ctx.fillText(NAMES[i],0,0);ctx.restore();
+  });
+  ctx.fillStyle="#8b97a6";ctx.textAlign="left";
+  ctx.fillText(m.sym?"rows and columns: signals":"row = X (given) · column = Y (uncertain)",left,18);
+  order.forEach((i,r)=>order.forEach((j,c)=>{
+    const x=left+c*cs,y=top+r*cs;
+    if(i===j){ctx.fillStyle="#161b22";ctx.fillRect(x,y,cs-1,cs-1);return}
+    const v=m.get(i,j);
+    ctx.fillStyle=Number.isFinite(v)?rgb(pal(stops,scale.t(v))):"#1c232c";ctx.fillRect(x,y,cs-1,cs-1);
+  }));
+  const hv=S.hover;
+  if(hv&&hv.type==="cell"){ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.strokeRect(left+hv.c*cs,top+hv.r*cs,cs-1,cs-1)}
+}
+function legend(){
+  const m=METRICS[S.metric],stops=stopsFor(m);
+  const g=[];for(let k=0;k<=12;k++)g.push(rgb(pal(stops,k/12))+` ${k/12*100}%`);
+  $("#lgBar").style.background=`linear-gradient(90deg,${g.join(",")})`;
+  $("#lgTitle").textContent=m.name+(m.unit?` [${m.unit}]`:"");
+  const a=m.inv?scale.hi:scale.lo,b=m.inv?scale.lo:scale.hi,f=v=>(m.div&&v>0?"+":"")+fmt(v,m.unit?4:3);
+  $("#lgLo").textContent=f(a);$("#lgHi").textContent=f(b);$("#lgMid").textContent=f((a+b)/2);
+  $("#lgDesc").innerHTML=m.desc+(m.sym?"":` Anchor: <b style="color:var(--accent)">${NAMES[S.anchor]}</b> (click a node to change it).`)+
+    (S.view==="graph"?" Edge width and colour follow the legend; contour lines on the field mark equal-elevation bands.":"");
+}
+
+/* ---------- detail panel + table ---------- */
+function pct(x){return (x*100).toFixed(2)+"%"}
+function detail(i,j){
+  const inf=pair(i,j,M.c1,M.c11,M.N),lift=(inf.n11/M.N)/(inf.px*inf.py||1),pyx=inf.n11/(M.c1[i]||1),pxy=inf.n11/(M.c1[j]||1);
+  const key=S.metric,row=(lab,v,k,u="bits")=>`<tr class="${key===k?"hi":""}"><td>${lab}</td><td class="n">${fmt(v,4)} ${u}</td></tr>`;
+  $("#det").innerHTML=`<b style="color:var(--accent)">${NAMES[i]}</b> (X) ↔ <b style="color:var(--accent)">${NAMES[j]}</b> (Y)
+  <table>
+  <tr><td>P(X) / P(Y)</td><td class="n">${pct(inf.px)} / ${pct(inf.py)}</td></tr>
+  <tr><td>both in same host-hour</td><td class="n">${inf.n11} (lift ${lift.toFixed(1)}×)</td></tr>
+  <tr><td>P(Y | X) / P(X | Y)</td><td class="n">${pct(pyx)} / ${pct(pxy)}</td></tr>
+  ${row("H(X) / H(Y)",inf.Hx,"-")}<tr><td></td><td class="n">${fmt(inf.Hy,4)} bits</td></tr>
+  ${row("Joint H(X,Y)",inf.Hxy,"joint")}
+  ${row("Conditional H(Y|X)",inf.Hy_x,"cond")}
+  ${row("Conditional H(X|Y)",inf.Hx_y,"-")}
+  ${row("Remaining H(Y|X)/H(Y)",inf.Hy_x/inf.Hy,"condr","")}
+  ${row("Mutual I(X;Y)",inf.I,"mi")}
+  ${row("Normalized MI",inf.I/Math.min(inf.Hx,inf.Hy),"nmi","")}
+  ${BASE?row("Δ MI vs baseline",inf.I-BASE[i*n+j],"delta"):""}
+  </table>`;
+}
+function node(i){
+  const rel=[];for(let j=0;j<n;j++)if(j!==i&&M.act[i]&&M.act[j])rel.push([j,M.mi[i*n+j]]);
+  rel.sort((a,b)=>b[1]-a[1]);
+  $("#det").innerHTML=`<b style="color:var(--accent)">${NAMES[i]}</b><br><span class="note">P = ${pct(M.c1[i]/M.N)} of host-hours · ${M.c1[i]} events</span>
+  <table><tr><th>Most related signals</th><th class="n">MI (bits)</th></tr>
+  ${rel.slice(0,6).map(([j,v])=>`<tr><td>${NAMES[j]}</td><td class="n">${fmt(v,4)}</td></tr>`).join("")}</table>
+  <p class="note">${METRICS[S.metric].sym?"":"Click sets this as the anchor X."}</p>`;
+}
+function topTable(){
+  const m=METRICS[S.metric],top=edges.slice(0,10);
+  $("#topTbl").innerHTML=`<table class="top"><tr><th>Pair</th><th class="n">${m.name.split(" ").slice(0,3).join(" ")}</th><th class="n">MI (bits)</th><th class="n">lift</th><th class="n">co-occurrences</th></tr>`+
+  top.map(e=>{const inf=pair(e.a,e.b,M.c1,M.c11,M.N),lift=(inf.n11/M.N)/(inf.px*inf.py||1);
+    return `<tr><td>${NAMES[e.a]} ${m.sym?"↔":"→"} ${NAMES[e.b]}</td><td class="n">${(m.div&&e.v>0?"+":"")+fmt(e.v,4)}</td><td class="n">${fmt(inf.I,4)}</td><td class="n">${lift.toFixed(1)}×</td><td class="n">${inf.n11}</td></tr>`}).join("")+"</table>";
+}
+
+/* ---------- interaction ---------- */
+function mouse(ev){const r=cv.getBoundingClientRect();return [ev.clientX-r.left,ev.clientY-r.top]}
+function pickGraph(x,y){
+  for(let i=0;i<n;i++){const p=px(POS[i]);if(Math.hypot(x-p[0],y-p[1])<=nodeR(i)+4)return {type:"node",i}}
+  let best=null,bd=8;
+  for(const e of edges){const d=segDist(x,y,px(POS[e.i]),px(POS[e.j]));if(d<bd){bd=d;best=e}}
+  return best?{type:"edge",e:best}:null;
+}
+function pickMatrix(x,y){
+  if(!matrixGeom)return null;const {left,top,cs}=matrixGeom,c=Math.floor((x-left)/cs),r=Math.floor((y-top)/cs);
+  return r>=0&&c>=0&&r<n&&c<n&&order[r]!==order[c]?{type:"cell",r,c}:null;
+}
+cv.addEventListener("mousemove",ev=>{
+  const [x,y]=mouse(ev),h=S.view==="graph"?pickGraph(x,y):pickMatrix(x,y);
+  S.hover=h;paint();
+  if(!h)return;
+  if(h.type==="node")node(h.i);
+  else if(h.type==="edge")detail(h.e.a,h.e.b);
+  else detail(order[h.r],order[h.c]);
+});
+cv.addEventListener("mouseleave",()=>{S.hover=null;paint()});
+cv.addEventListener("click",ev=>{
+  if(S.view!=="graph")return;const h=pickGraph(...mouse(ev));
+  if(h&&h.type==="node"&&M.act[h.i]){S.anchor=h.i;redraw()}
+});
+
+/* ---------- orchestration ---------- */
+function paint(){S.view==="graph"?drawGraph():drawMatrix()}
+function redraw(){
+  fit();computeScale();computeEdges();
+  if(S.view==="graph"&&S.topo)buildField();
+  paint();legend();topTable();
+  $("#hint").textContent=S.view==="graph"
+    ?(METRICS[S.metric].sym?"Hover a node or edge for details. Layout is driven by mutual information, so related signals sit close together.":"Directional measure: click a node to choose the conditioning signal X; edges show H(other | X) for that anchor. Matrix view shows every ordered pair at once.")
+    :"Hover a cell. Rows and columns are ordered so related signals sit next to each other (greedy seriation by MI).";
+}
+function recompute(){simulate();layout();redraw();const first=!$("#det").innerHTML;if(first)$("#det").innerHTML='<span class="note">Hover the map for details about a signal or relationship.</span>'}
+
+/* controls */
+METRIC_KEYS.forEach(k=>{const b=document.createElement("button");b.textContent=METRICS[k].name.replace(/ \[.*/,"");b.dataset.k=k;b.onclick=()=>{S.metric=k;mark();redraw()};$("#metricBtns").appendChild(b)});
+function mark(){
+  document.querySelectorAll("#metricBtns button").forEach(b=>b.classList.toggle("on",b.dataset.k===S.metric));
+  $("#vGraph").classList.toggle("on",S.view==="graph");$("#vMatrix").classList.toggle("on",S.view==="matrix");
+}
+$("#vGraph").onclick=()=>{S.view="graph";mark();redraw()};
+$("#vMatrix").onclick=()=>{S.view="matrix";mark();redraw()};
+$("#topo").onchange=e=>{S.topo=e.target.checked;redraw()};
+$("#topPct").oninput=e=>{S.topPct=+e.target.value;$("#topPctV").textContent=S.topPct+"%";redraw()};
+$("#nSamp").oninput=e=>{S.N=+e.target.value;$("#nSampV").textContent=S.N.toLocaleString();recompute()};
+$("#resample").onclick=()=>{S.seed=Math.floor(Math.random()*1e9);recompute()};
+$("#setBase").onclick=()=>{BASE=M.mi.slice();redraw()};
+$("#inject").onclick=()=>{CAUSES[IX_C("fw")].on=true;syncCauses();S.metric="delta";mark();recompute()};
+const IX_C=id=>CAUSES.findIndex(c=>c.id===id);
+function syncCauses(){CAUSES.forEach(c=>{$("#cz_"+c.id).checked=c.on})}
+CAUSES.forEach(c=>{
+  const l=document.createElement("label");l.className="chk";
+  l.innerHTML=`<input type="checkbox" id="cz_${c.id}" ${c.on?"checked":""}><span><b>${c.name}</b> <span class="note">→ ${Object.keys(c.t).join(", ")}</span></span>`;
+  l.querySelector("input").onchange=e=>{c.on=e.target.checked;recompute()};
+  $("#causes").appendChild(l);
+});
+$("#topPctV").textContent=S.topPct+"%";$("#nSampV").textContent=S.N.toLocaleString();
+window.addEventListener("resize",()=>{if(M)redraw()});
+
+simulate();BASE=M.mi.slice();layout();mark();redraw();
+$("#det").innerHTML='<span class="note">Hover the map for details about a signal or relationship.</span>';
+window.__drift={S,redraw,recompute,set:(k,v)=>{S[k]=v;mark();redraw()}};
+</script>
+</body>
+</html>

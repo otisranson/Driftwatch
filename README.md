@@ -1,19 +1,55 @@
 # Driftwatch
 
-An all-in-one, dependency-free HTML page showing how **Shannon entropy** and **KL divergence** can detect drift in infrastructure telemetry, with a focus on **the subject lines of a large fleet's tickets**.
+Dependency-free HTML pages showing how **Shannon entropy**, **KL divergence**, **joint / conditional entropy** and **mutual information** can find problems in infrastructure telemetry. The focus is a large server fleet's **ticket subject lines**: catch the moment the signal starts to change, and see which signals move together.
 
-Open `index.html` in a browser. No build step, no network access needed.
+**Live demo:** https://otisranson.github.io/Driftwatch/ · or just open the files in a browser (no build, no network).
 
-## What's inside
+## Page 1 — `index.html`: ticket subject drift
 
-1. **The two ideas**: H(P) and D(P‖Q) in plain terms.
-2. **Ticket subject drift (pipeline)**: normalize subjects into templates (hostnames, numbers, IPs, versions stripped), then histogram them. Includes an interactive normalizer.
-3. **Live fleet ticket simulator**: 40 racks, ~3,000 tickets/day, 18 templates. A baseline is learned from 14 healthy days and thresholds are calibrated on 7 more. Inject incidents and compare volume, entropy and KL detectors (with detection lag): new firmware bug (new subject line), slow burn, rack power event, and a monitoring-tool rollout that changes subject formatting (false positive that normalization fixes). A ranked table shows which templates drive the KL, flags NEW ones, and reports rack spread (localized / cohort / fleet-wide).
-4. **Bring your own tickets**: paste subject lines (processed locally in the browser) and get entropy, KL and the top contributing templates, baseline vs recent.
-5. **Playground P vs Q**, 6. **Live traffic drift detector**, 7. **Load balancer evenness**: the underlying mechanics on other kinds of telemetry.
-8. **Where this fits**: use-case table and practical notes.
+Subjects are normalized into templates (hostnames, numbers, IPs and versions stripped), counted over a trailing 24 h window, and compared with a baseline learned from healthy history. Three detectors run side by side — **ticket volume**, **entropy** and **KL divergence** — each reporting how many hours after an incident it first alerted.
 
-All simulated data; nothing leaves your browser.
+![Live fleet ticket simulator during a firmware-bug incident: volume stays flat while entropy and KL react](screenshots/ticket-drift.png)
+
+*Above: a new firmware bug starts producing a brand-new subject line (dashed red line = incident start). Volume stays inside its healthy band, entropy leaves its band after about 6 h, and KL crosses its threshold after about 2 h. The table names the culprit template, tags it `NEW`, and reports its rack spread ("cohort").*
+
+Contents:
+
+1. **The two ideas**: H(P) and D(P‖Q).
+2. **Pipeline + normalizer**: interactive; 400 sample tickets collapse from ~398 unique subjects to 18 templates.
+3. **Live fleet simulator**: 40 racks, ~3,000 tickets/day. Scenarios: new firmware bug, slow burn (bad drive batch), rack power event, and a monitoring rollout that rewrites subject formatting (a false positive that normalization fixes).
+4. **Bring your own tickets**: paste subject lines, processed locally in the browser.
+5–7. Playground (P vs Q), live traffic detector, load-balancer evenness.
+8. Where this fits, with practical notes.
+
+## Page 2 — `cooccurrence.html`: signal co-occurrence map
+
+Treat each normalized ticket subject as a **signal**, count which signals fire together on the same host in the same hour, and paint information-theoretic measures onto a graph like elevation on a topographic map, with a legend.
+
+| Measure | What it shows |
+|---|---|
+| **Joint entropy** H(X,Y) | Total uncertainty of the pair; glows for busy signals whether or not they are related |
+| **Conditional entropy** H(Y\|X), and H(Y\|X)/H(Y) | Uncertainty left in Y once X is known. Directional: the matrix view shows every ordered pair |
+| **Mutual information** I(X;Y), and normalized MI | Shared information; the cleanest "these belong together" score |
+| **Δ MI vs baseline** | What a new underlying cause looks like: new edges light up |
+
+![Topographic co-occurrence map of ticket signals, mutual information](screenshots/map-mi.png)
+
+*Mutual information map: tightly related signals (disk-full · backup-failed, fan-critical · ipmi-sensor, memory-high · kubelet-restart…) cluster together and form peaks on the topographic field.*
+
+![Delta MI map after injecting a new NIC-firmware cause](screenshots/map-delta.png)
+
+*Δ MI after injecting a new hidden cause (NIC firmware bug): a new hot spot appears around `nic-fw-error`, `nic-flapping`, `unreachable` and `ntp-offset`, while the rest of the map stays neutral.*
+
+![Matrix view of remaining uncertainty H(Y|X)/H(Y)](screenshots/matrix-conditional.png)
+
+*Matrix view of remaining uncertainty H(Y|X)/H(Y): rows = X (given), columns = Y. The matrix is not symmetric, which is the point of conditional entropy.*
+
+Controls: switch measure, graph/matrix view, topographic field on/off, how many edges to show, toggle the hidden causes that generate the data, change the sample size (watch spurious edges appear at small N), resample, and set the baseline snapshot.
+
+## Notes
+
+- All data is simulated; nothing leaves your browser.
+- Normalization rules are regexes written for the simulated subjects; tune them for your own ticket system.
 
 ## License
 

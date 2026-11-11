@@ -63,7 +63,7 @@ footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
 <main>
 <nav><a href="index.html">← Ticket drift detector</a></nav>
 <h1><span>Drift</span>watch · signal map</h1>
-<p class="lead">Tickets don't arrive alone. When a rack loses power you get <i>unreachable</i>, <i>PSU lost</i> and <i>fan critical</i> together; a failing drive brings <i>SMART warning</i> and <i>backup failed</i>. This page treats each normalized ticket subject as a <b>signal</b>, measures which signals co-occur on the same host in the same hour, and paints the strength of each relationship onto a graph — like elevation on a topographic map.</p>
+<p class="lead">Tickets don't arrive alone. When a rack loses power you get <i>unreachable</i>, <i>PSU lost</i> and <i>fan critical</i> together; a failing drive brings <i>SMART warning</i> and <i>backup failed</i>. This page treats each normalized ticket subject as a <b>signal</b>, measures which signals co-occur on the same host in the same hour, and colours each relationship (edge) on a topographic scale — deep blue for weak, through green and yellow, to brown and white peaks for the strongest.</p>
 
 <section>
   <h2>1 · Three measures, one picture</h2>
@@ -90,7 +90,6 @@ footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
   <div class="btns">
     <span class="note">View:</span>
     <button id="vGraph" class="on">Graph</button><button id="vMatrix">Matrix</button>
-    <label class="chk"><input type="checkbox" id="topo" checked> Topographic field</label>
     <label class="sl">Edges shown (top %) <input id="topPct" type="range" min="3" max="100" value="18"><span id="topPctV" class="mono"></span></label>
   </div>
 
@@ -133,7 +132,7 @@ footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
     <li><b>Cluster = shared cause.</b> Tightly linked signals (e.g. unreachable · PSU · fan) usually trace to one physical or software cause. Open a ticket for the cause, not for each signal.</li>
     <li><b>Joint vs mutual.</b> Pick “Joint entropy” and the busiest signals glow regardless of relatedness; switch to “Mutual information” and only genuinely coupled pairs remain. That contrast is the whole point of subtracting H(X)+H(Y).</li>
     <li><b>Asymmetry shows direction of explanation.</b> In the matrix, if <i>backup-fail</i> given <i>disk-full</i> is much lower than the reverse, disk-full is a strong predictor of backup failures but not every failed backup is a disk problem.</li>
-    <li><b>Topographic field.</b> Colour is summed edge influence blended smoothly across the plane, so peaks sit where several strong edges meet — the hubs worth investigating first. Contour lines mark equal elevation bands.</li>
+    <li><b>Topographic colour scale.</b> Every edge is coloured by its value on a hypsometric (elevation-style) palette: low ground is blue, then green and yellow, and the highest ridges are brown and white. A node where several warm edges meet is a hub worth investigating first.</li>
     <li><b>Unit of co-occurrence matters.</b> Host-hour finds same-machine coupling. Use rack-hour for shared-infrastructure causes, or cluster-hour for software rollouts.</li>
   </ul>
 </section>
@@ -170,8 +169,8 @@ CAUSES.forEach(c=>c.ti=Object.entries(c.t).map(([k,p])=>[IX[k],p]));
 function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 
 /* ---------- state ---------- */
-const S={metric:"mi",view:"graph",topo:true,topPct:18,anchor:IX["unreachable"],N:40000,seed:7,hover:null,sel:null};
-let M=null,BASE=null,POS=[],order=[],edges=[],scale=null,fieldCv=null,matrixGeom=null;
+const S={metric:"mi",view:"graph",topPct:18,anchor:IX["unreachable"],N:40000,seed:7,hover:null,sel:null};
+let M=null,BASE=null,POS=[],order=[],edges=[],scale=null,matrixGeom=null;
 
 /* ---------- simulate + information measures ---------- */
 function simulate(){
@@ -298,42 +297,16 @@ function segDist(x,y,a,b){
   let t=((x-a[0])*dx+(y-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));
   const X=a[0]+t*dx,Y=a[1]+t*dy;return Math.hypot(x-X,y-Y);
 }
-function buildField(){
-  const m=METRICS[S.metric],gw=Math.max(80,Math.round(W/3)),gh=Math.max(60,Math.round(H/3));
-  fieldCv=document.createElement("canvas");fieldCv.width=gw;fieldCv.height=gh;
-  const fx=fieldCv.getContext("2d"),img=fx.createImageData(gw,gh),val=new Float32Array(gw*gh);
-  const sig=.07*W/(W/gw),segs=edges.map(e=>({a:[POS[e.i][0]*gw,POS[e.i][1]*gh],b:[POS[e.j][0]*gw,POS[e.j][1]*gh],
-      w:m.div?Math.sign(e.v)*e.s:e.s}));
-  const inv2=1/(2*sig*sig);let mx=1e-9;
-  for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
-    let v=0;
-    for(const s of segs){const d=segDist(x,y,s.a,s.b);v+=s.w*Math.exp(-d*d*inv2)}
-    val[y*gw+x]=v;const av=Math.abs(v);if(av>mx)mx=av;
-  }
-  const stops=stopsFor(m),LV=12,band=new Int16Array(gw*gh),col=[];
-  for(let k=0;k<gw*gh;k++){
-    const t=m.div?(val[k]/mx+1)/2:Math.pow(val[k]/mx,.75);
-    band[k]=Math.floor(t*LV);col[k]=pal(stops,t);
-  }
-  for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
-    const k=y*gw+x;let c=col[k];
-    const edge=(x+1<gw&&band[k+1]!==band[k])||(y+1<gh&&band[k+gw]!==band[k]);
-    const a=edge?[c[0]*.55,c[1]*.55,c[2]*.55]:c;
-    img.data[k*4]=a[0];img.data[k*4+1]=a[1];img.data[k*4+2]=a[2];img.data[k*4+3]=edge?235:150;
-  }
-  fx.putImageData(img,0,0);
-}
 function nodeR(i){return 5+34*Math.sqrt(M.c1[i]/M.N)}
 function drawGraph(){
   const m=METRICS[S.metric],stops=stopsFor(m);
   ctx.clearRect(0,0,W,H);ctx.fillStyle="#11161d";ctx.fillRect(0,0,W,H);
-  if(S.topo&&fieldCv){ctx.imageSmoothingEnabled=true;ctx.drawImage(fieldCv,0,0,W,H)}
   const hov=S.hover;
-  for(const e of edges){
-    const a=px(POS[e.i]),b=px(POS[e.j]),lw=1.5+3.5*e.s;
+  for(const e of edges.slice().reverse()){
+    const a=px(POS[e.i]),b=px(POS[e.j]),lw=2.5+5.5*e.s;
     ctx.lineCap="round";
-    ctx.strokeStyle="rgba(8,10,14,.75)";ctx.lineWidth=lw+2.5;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
-    ctx.strokeStyle=rgb(pal(stops,e.t),.97);ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
+    ctx.strokeStyle="rgba(5,7,10,.9)";ctx.lineWidth=lw+3;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
+    ctx.strokeStyle=rgb(pal(stops,e.t),1);ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();
     if(hov&&hov.type==="edge"&&hov.e===e){ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.setLineDash([4,3]);ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.setLineDash([])}
   }
   ctx.font="12px system-ui,sans-serif";ctx.textAlign="center";
@@ -375,7 +348,7 @@ function legend(){
   const a=m.inv?scale.hi:scale.lo,b=m.inv?scale.lo:scale.hi,f=v=>(m.div&&v>0?"+":"")+fmt(v,m.unit?4:3);
   $("#lgLo").textContent=f(a);$("#lgHi").textContent=f(b);$("#lgMid").textContent=f((a+b)/2);
   $("#lgDesc").innerHTML=m.desc+(m.sym?"":` Anchor: <b style="color:var(--accent)">${NAMES[S.anchor]}</b> (click a node to change it).`)+
-    (S.view==="graph"?" Edge width and colour follow the legend; contour lines on the field mark equal-elevation bands.":"");
+    (S.view==="graph"?" Each edge is coloured by its value on this scale (and thicker when stronger).":"");
 }
 
 /* ---------- detail panel + table ---------- */
@@ -443,7 +416,6 @@ cv.addEventListener("click",ev=>{
 function paint(){S.view==="graph"?drawGraph():drawMatrix()}
 function redraw(){
   fit();computeScale();computeEdges();
-  if(S.view==="graph"&&S.topo)buildField();
   paint();legend();topTable();
   $("#hint").textContent=S.view==="graph"
     ?(METRICS[S.metric].sym?"Hover a node or edge for details. Layout is driven by mutual information, so related signals sit close together.":"Directional measure: click a node to choose the conditioning signal X; edges show H(other | X) for that anchor. Matrix view shows every ordered pair at once.")
@@ -459,7 +431,6 @@ function mark(){
 }
 $("#vGraph").onclick=()=>{S.view="graph";mark();redraw()};
 $("#vMatrix").onclick=()=>{S.view="matrix";mark();redraw()};
-$("#topo").onchange=e=>{S.topo=e.target.checked;redraw()};
 $("#topPct").oninput=e=>{S.topPct=+e.target.value;$("#topPctV").textContent=S.topPct+"%";redraw()};
 $("#nSamp").oninput=e=>{S.N=+e.target.value;$("#nSampV").textContent=S.N.toLocaleString();recompute()};
 $("#resample").onclick=()=>{S.seed=Math.floor(Math.random()*1e9);recompute()};

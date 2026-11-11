@@ -23,7 +23,7 @@ Contents:
 
 ## Page 2 — `cooccurrence.html`: signal co-occurrence map
 
-Treat each normalized ticket subject as a **signal**, count which signals fire together on the same host in the same hour, and paint information-theoretic measures onto a graph like elevation on a topographic map, with a legend.
+Treat each normalized ticket subject as a **signal**, count which signals fire together on the same host in the same hour, and colour every edge of the graph with an information-theoretic measure on a topographic (hypsometric) scale — blue low ground, through green and yellow, to white peaks — with a legend.
 
 | Measure | What it shows |
 |---|---|
@@ -32,19 +32,19 @@ Treat each normalized ticket subject as a **signal**, count which signals fire t
 | **Mutual information** I(X;Y), and normalized MI | Shared information; the cleanest "these belong together" score |
 | **Δ MI vs baseline** | What a new underlying cause looks like: new edges light up |
 
-![Topographic co-occurrence map of ticket signals, mutual information](screenshots/map-mi.png)
+![Co-occurrence graph with topographically colour-coded edges, mutual information](screenshots/map-mi.png)
 
-*Mutual information map: tightly related signals (disk-full · backup-failed, fan-critical · ipmi-sensor, memory-high · kubelet-restart…) cluster together and form peaks on the topographic field.*
+*Mutual information map: edges are coloured by value (see the legend) and thicker when stronger. Tightly related signals (disk-full · backup-failed, fan-critical · ipmi-sensor, memory-high · kubelet-restart…) sit together and light up.*
 
 ![Delta MI map after injecting a new NIC-firmware cause](screenshots/map-delta.png)
 
-*Δ MI after injecting a new hidden cause (NIC firmware bug): a new hot spot appears around `nic-fw-error`, `nic-flapping`, `unreachable` and `ntp-offset`, while the rest of the map stays neutral.*
+*Δ MI after injecting a new hidden cause (NIC firmware bug): new warm edges appear around `nic-fw-error`, `nic-flapping`, `unreachable` and `ntp-offset`, while the rest of the map stays neutral.*
 
 ![Matrix view of remaining uncertainty H(Y|X)/H(Y)](screenshots/matrix-conditional.png)
 
 *Matrix view of remaining uncertainty H(Y|X)/H(Y): rows = X (given), columns = Y. The matrix is not symmetric, which is the point of conditional entropy.*
 
-Controls: switch measure, graph/matrix view, topographic field on/off, how many edges to show, toggle the hidden causes that generate the data, change the sample size (watch spurious edges appear at small N), resample, and set the baseline snapshot.
+Controls: switch measure, graph/matrix view, how many edges to show, toggle the hidden causes that generate the data, change the sample size (watch spurious edges appear at small N), resample, and set the baseline snapshot.
 
 ## Notes
 

@@ -59,13 +59,39 @@ th{color:var(--dim);font-weight:600}
 .note{color:var(--dim);font-size:13px}
 footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
 a{color:var(--p)}
+.steps{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:12px 0}
+.step{flex:1 1 150px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px}
+.step b{display:block;color:var(--accent);margin-bottom:2px}
+.step .mono{color:var(--dim);font-size:12px}
+.arrow{align-self:center;color:var(--dim)}
+.metric .lag{font-size:12px;color:var(--dim);margin-top:2px}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:700;font-size:12px;margin-left:6px;vertical-align:middle}
+.pill.ok{background:rgba(61,220,151,.15);color:var(--ok)}
+.pill.bad{background:rgba(255,92,108,.18);color:var(--bad)}
+select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+input[type=text],textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:13px ui-monospace,Menlo,Consolas,monospace}
+textarea{min-height:140px;resize:vertical}
+label.chk{display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.cl{font-size:12px;color:var(--dim);margin:10px 0 3px}
+.cl b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.trow{display:grid;grid-template-columns:minmax(0,1fr) 62px 62px 66px 160px;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px;align-items:center}
+.trow.h{color:var(--dim);font-size:12px}
+.trow .t{font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow .n{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace}
+.new{background:var(--bad);color:#111;font-weight:700;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:6px}
+.loc{font-size:12px}
+@media(max-width:700px){.trow{grid-template-columns:minmax(0,1fr) 54px 54px 58px}.trow .sp{display:none}}
+.feed{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;max-height:230px;overflow:auto}
+.feed div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed .tp{color:var(--dim)}
+.hl{color:var(--accent)}
 </style>
 </head>
 <body>
 <main>
 
 <h1><span>Drift</span>watch</h1>
-<p class="lead">Two numbers from information theory — <b>Shannon entropy</b> and <b>KL divergence</b> — turn raw telemetry into a signal that says <i>"the shape of your traffic just changed."</i> Everything below is interactive, runs offline, and lives in one HTML file.</p>
+<p class="lead">Two numbers from information theory — <b>Shannon entropy</b> and <b>KL divergence</b> — turn raw telemetry into a signal that says <i>"the shape of your traffic just changed."</i> Everything below is interactive, runs offline, and lives in one HTML file. The headline use case is <b>catching a fleet's ticket subject lines when they start to change</b> (sections 2–4); sections 5–7 are the underlying mechanics on other kinds of telemetry.</p>
 
 <section>
   <h2>1 · The two ideas</h2>
@@ -91,7 +117,74 @@ a{color:var(--p)}
 </section>
 
 <section>
-  <h2>2 · Playground: P vs Q</h2>
+  <h2>2 · Use case: drift in ticket subject lines</h2>
+  <p>A fleet of thousands of servers files thousands of tickets a day. Nobody reads them all, and a new problem rarely announces itself: it shows up as <b>a subject line that wasn't there last week</b>, or an old subject quietly doubling. The idea: treat each ticket's subject as a category, build a histogram over a window, and compare it with a baseline.</p>
+  <div class="steps">
+    <div class="step"><b>1 Subject line</b>free text, every ticket<div class="mono">Disk usage 91% on web-1704.dc1…</div></div><span class="arrow">→</span>
+    <div class="step"><b>2 Normalize</b>strip hosts, numbers, IPs, versions<div class="mono">disk usage &lt;pct&gt; on &lt;host&gt;</div></div><span class="arrow">→</span>
+    <div class="step"><b>3 Histogram</b>tickets per template over a window<div class="mono">24 h sliding window</div></div><span class="arrow">→</span>
+    <div class="step"><b>4 Compare</b>window P vs baseline Q<div class="mono">H(P), D(P‖Q)</div></div><span class="arrow">→</span>
+    <div class="step"><b>5 Explain</b>rank templates by KL term, check rack spread<div class="mono">NEW · localized · fleet-wide</div></div>
+  </div>
+  <p class="note">Raw subjects are nearly all unique (they contain hostnames and numbers), so counting them says nothing. Collapsing them to templates is what makes the histogram meaningful. Try your own subject:</p>
+  <input type="text" id="nIn" value="Disk usage 91.5% on compute-1707.dc1.example.net (/var, 3.2GB free)">
+  <p class="mono" style="margin:8px 0">→ <span id="nOut" class="hl"></span></p>
+  <label class="chk"><input type="checkbox" class="strip"> Also strip leading <code>[tags]</code> such as <code>[MON2]</code> (matters in the next section)</label>
+  <div class="metrics">
+    <div class="metric"><small>Sample tickets</small><strong id="nT">–</strong></div>
+    <div class="metric"><small>Unique raw subjects</small><strong id="nR">–</strong></div>
+    <div class="metric"><small>Unique templates</small><strong id="nU" style="color:var(--ok)">–</strong></div>
+  </div>
+  <p class="note">Rules, applied after lowercasing: UUIDs → <code>&lt;id&gt;</code>, IPv4 → <code>&lt;ip&gt;</code>, hostnames (<code>name-1234[.domain]</code>) → <code>&lt;host&gt;</code>, other FQDNs → <code>&lt;fqdn&gt;</code>, percentages → <code>&lt;pct&gt;</code>, versions → <code>&lt;ver&gt;</code>, sizes/durations/decimals → <code>&lt;num&gt;</code>, paths → <code>&lt;path&gt;</code>, integers → <code>&lt;n&gt;</code>. Production systems often use a log-template miner such as Drain; the downstream math is identical.</p>
+</section>
+
+<section>
+  <h2>3 · Live fleet ticket simulator</h2>
+  <p class="note">A simulated fleet of 40 racks files about 3,000 tickets a day across 18 subject templates, with a daily rhythm. The detectors learned a baseline from 14 healthy days and calibrated thresholds on the next 7. Each tick advances simulated hours; the detectors look at the trailing 24 hours. Inject an incident and compare which detector notices, and how fast. Counts get +0.5 smoothing, so a template never seen in the baseline gets a small non-zero q instead of an infinite divergence.</p>
+  <div class="btns" id="tScen"></div>
+  <div class="btns">
+    <label class="chk"><input type="checkbox" class="strip"> Strip <code>[tags]</code> in normalizer</label>
+    <label class="sl">KL threshold <input id="tThr" type="range" min="0" max="0.3" step="0.001"><span id="tThrV" class="mono"></span></label>
+    <button id="tThrAuto">Auto</button>
+    <select id="tSpeed"><option value="1">1 h / tick</option><option value="3" selected>3 h / tick</option><option value="8">8 h / tick</option></select>
+    <button id="tPause">Pause</button>
+    <span class="mono note" id="tClock"></span>
+  </div>
+  <div class="metrics">
+    <div class="metric" id="tdVol"></div>
+    <div class="metric" id="tdEnt"></div>
+    <div class="metric" id="tdKL"></div>
+  </div>
+  <div class="cl"><b style="background:#4cc2ff"></b>Ticket volume, trailing 24 h &nbsp;·&nbsp; green band: healthy range &nbsp;·&nbsp; dashed red: incident start</div>
+  <canvas id="tcV" style="height:105px"></canvas>
+  <div class="cl"><b style="background:#4cc2ff"></b>Entropy of the template mix, H (bits)</div>
+  <canvas id="tcE" style="height:105px"></canvas>
+  <div class="cl"><b style="background:#c792ea"></b>KL divergence from baseline (bits) &nbsp;·&nbsp; dashed amber: threshold</div>
+  <canvas id="tcK" style="height:125px"></canvas>
+  <div class="card" style="margin-top:12px" id="tExplain"></div>
+  <h3>Why is KL high? Top contributing templates (trailing 24 h)</h3>
+  <div class="trow h"><span>template</span><span class="n">window</span><span class="n">baseline</span><span class="n">bits</span><span class="sp">rack spread</span></div>
+  <div id="tContrib"></div>
+  <p class="note" style="margin-top:6px">Rack spread = effective number of racks (2^H over racks) for that template's tickets. A few racks means a localized event, ~40 means fleet-wide, in between suggests a hardware or software cohort.</p>
+  <h3>Newest tickets</h3>
+  <div class="feed" id="tFeed"></div>
+</section>
+
+<section>
+  <h2>4 · Try it on your own tickets</h2>
+  <p class="note">Paste subject lines, one per line, oldest first (if a line contains a tab, only the text after the last tab is used). Everything runs locally in your browser; nothing is uploaded. The first part of the list becomes the baseline, the rest is the recent window.</p>
+  <textarea id="byoIn" placeholder="Disk usage 88% on web-0412&#10;web-0733 unreachable (ping timeout)&#10;…"></textarea>
+  <div class="btns">
+    <button id="byoSample">Load sample (with an emerging problem)</button>
+    <label class="sl">Baseline = first <input id="byoSplit" type="range" min="40" max="95" value="75"><span id="byoSplitV" class="mono"></span></label>
+  </div>
+  <div class="metrics" id="byoM"></div>
+  <div class="trow h"><span>template</span><span class="n">recent</span><span class="n">baseline</span><span class="n">bits</span><span class="sp"></span></div>
+  <div id="byoT"></div>
+</section>
+
+<section>
+  <h2>5 · Playground: P vs Q</h2>
   <p class="note">Five HTTP status buckets. Drag the sliders; values are normalized automatically. Blue = observed P, grey = baseline Q.</p>
   <div class="row hdr"><span></span><span>P · observed</span><span>Q · baseline</span><span style="text-align:right">p·log₂(p/q)</span></div>
   <div id="pg"></div>
@@ -112,7 +205,7 @@ a{color:var(--p)}
 </section>
 
 <section>
-  <h2>3 · Live traffic drift detector</h2>
+  <h2>6 · Live traffic drift detector</h2>
   <p class="note">A simulated request stream (200 ms ticks, ~40 requests each) is bucketed by endpoint. The detector keeps a 12-second sliding window, computes entropy and KL against a fixed baseline, and alerts when KL crosses your threshold. Inject an incident and watch which signal notices.</p>
   <div class="btns" id="scen"></div>
   <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
@@ -137,7 +230,7 @@ a{color:var(--p)}
 </section>
 
 <section>
-  <h2>4 · Load balancer evenness</h2>
+  <h2>7 · Load balancer evenness</h2>
   <p class="note">Six backends. Set the share of traffic each receives. For a uniform target U there is a neat identity: <code>D(P‖U) = log₂N − H(P)</code>, so entropy and KL are two views of the same balance score.</p>
   <div id="lb"></div>
   <div class="btns">
@@ -156,9 +249,10 @@ a{color:var(--p)}
 </section>
 
 <section>
-  <h2>5 · Where this fits</h2>
+  <h2>8 · Where this fits</h2>
   <table>
     <tr><th>Use case</th><th>Categorical field</th><th>Baseline Q</th><th>What you see</th></tr>
+    <tr><td><b>Ticket subject drift</b></td><td>normalized subject template</td><td>previous 14 days</td><td>New templates flagged NEW, KL names the suspects, rack spread says localized vs fleet-wide; volume often stays silent</td></tr>
     <tr><td>DDoS / credential stuffing</td><td>endpoint, source IP/ASN</td><td>same hour last week</td><td>H drops, KL rises, top contributor is the targeted path</td></tr>
     <tr><td>Port scan / enumeration</td><td>destination port, URL path</td><td>rolling 24 h</td><td>H rises (spread out), KL rises on rare buckets</td></tr>
     <tr><td>Canary / bad deploy</td><td>status class, error code</td><td>stable fleet</td><td>KL(canary‖stable) &gt; 0 before the error-rate alert fires</td></tr>
@@ -346,5 +440,278 @@ const LBP={even:[100,100,100,100,100,100],sticky:[160,120,100,90,70,60],fail:[10
 document.querySelectorAll("[data-lb]").forEach(b=>b.onclick=()=>{lbP=LBP[b.dataset.lb].slice();lbUpdate()});
 lbP=LBP.even.slice();lbUpdate();
 </script>
+
+<script>
+/* ===== Ticket-subject drift (self-contained; shares nothing with the demos above) ===== */
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const log2=x=>Math.log(x)/Math.LN2;
+const f=(x,d=3)=>x.toFixed(d);
+const R=n=>Math.floor(Math.random()*n);
+const pick=a=>a[R(a.length)];
+const gauss=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random())};
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+
+/* ---- normalizer ---- */
+const NORM={strip:false};
+function normalize(s){
+  s=s.toLowerCase();
+  if(NORM.strip)s=s.replace(/^(\s*\[[^\]]*\]\s*)+/,"");
+  return s
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,"<id>")
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g,"<ip>")
+    .replace(/\b[a-z][a-z0-9]*-\d{3,}(?:\.[a-z0-9-]+)*\b/g,"<host>")
+    .replace(/\b(?:[a-z0-9-]+\.){2,}[a-z]{2,}\b/g,"<fqdn>")
+    .replace(/\b\d+(?:\.\d+)?%/g,"<pct>")
+    .replace(/\bv?\d+(?:\.\d+){2,3}\b/g,"<ver>")
+    .replace(/\b\d+(?:\.\d+)?\s?(?:[kmgt]b|ms|s)\b/g,"<num>")
+    .replace(/\b\d+\.\d+\b/g,"<num>")
+    .replace(/(?:\/[\w.-]+)+/g,"<path>")
+    .replace(/\b0x[0-9a-f]+\b/g,"<hex>")
+    .replace(/\b\d+\b/g,"<n>")
+    .replace(/\s+/g," ").trim();
+}
+
+/* ---- entropy / KL over count maps ---- */
+function entH(m,N){let H=0;for(const c of m.values()){const p=c/N;H-=p*log2(p)}return H}
+function compareMaps(bm,bN,wm,wN,a=0.5){
+  const keys=new Set([...bm.keys(),...wm.keys()]),K=keys.size;
+  let KL=0;const rows=[];
+  for(const k of keys){
+    const b=bm.get(k)||0,c=wm.get(k)||0;
+    const q=(b+a)/(bN+K*a),p=(c+a)/(wN+K*a),term=p*log2(p/q);
+    KL+=term;rows.push({k,b,c,pw:c/wN,qb:b/bN,term,novel:b===0});
+  }
+  return {KL,H:entH(wm,wN),rows};
+}
+const countMap=a=>{const m=new Map();for(const k of a)m.set(k,(m.get(k)||0)+1);return m};
+
+/* ---- fleet simulator ---- */
+const RACKS=40,ROLES=["web","db","cache","compute","stor"];
+const host=(rack)=>{const h=`${pick(ROLES)}-${String(rack).padStart(2,"0")}${String(1+R(40)).padStart(2,"0")}`;return Math.random()<.3?`${h}.dc${1+R(3)}.example.net`:h};
+const T=[
+ {k:"disk",  w:14, f:h=>`Disk usage ${60+R(40)}% on ${h}`},
+ {k:"unreach",w:10,f:h=>`${h} unreachable (ping timeout)`},
+ {k:"cpu",   w:9,  f:h=>`High CPU load average ${(8+Math.random()*30).toFixed(1)} on ${h}`},
+ {k:"mem",   w:8,  f:h=>`Memory usage above threshold on ${h}`},
+ {k:"smart", w:7,  f:h=>`SMART warning: reallocated sectors on ${h} /dev/sd${pick("abcd")}`},
+ {k:"cert",  w:6,  f:()=>`Certificate for ${pick(["shop","api","pay"])}.prod.example.com expires in ${1+R(30)} days`},
+ {k:"ntp",   w:6,  f:h=>`NTP offset ${100+R(900)}ms exceeds limit on ${h}`},
+ {k:"psu",   w:3,  f:h=>`PSU redundancy lost on ${h}`},
+ {k:"patch", w:8,  f:h=>`Patch compliance: ${h} missing ${1+R(9)} security updates`},
+ {k:"svc1",  w:4,  f:h=>`Service nginx restarted ${2+R(8)} times in 1h on ${h}`},
+ {k:"svc2",  w:3,  f:h=>`Service kubelet restarted ${2+R(8)} times in 1h on ${h}`},
+ {k:"svc3",  w:2,  f:h=>`Service sshd restarted ${2+R(8)} times in 1h on ${h}`},
+ {k:"svc4",  w:2,  f:h=>`Service chronyd restarted ${2+R(8)} times in 1h on ${h}`},
+ {k:"fan",   w:3,  f:h=>`Fan speed critical on ${h}`},
+ {k:"ipmi",  w:4,  f:h=>`IPMI sensor reading unavailable on ${h}`},
+ {k:"backup",w:6,  f:h=>`Backup job failed for ${h} (exit code ${pick([1,2,13,255])})`},
+ {k:"panic", w:1.5,f:h=>`Kernel panic on ${h}`},
+ {k:"flap",  w:5,  f:h=>`Network interface flapping on ${h}`},
+ {k:"fw",    w:0,  f:h=>`NIC firmware checksum error on ${h} (fw ${pick(["4.2.1","4.2.3"])})`}
+];
+const IX=Object.fromEntries(T.map((t,i)=>[t.k,i]));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=R(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
+const HW_RACKS=shuffle([...Array(RACKS).keys()]).slice(0,15);
+const BAD_BATCH=shuffle([...Array(RACKS).keys()]).slice(0,8);
+const DEAD=[17,18];
+const fromSet=(set,p)=>()=>Math.random()<p?pick(set):R(RACKS);
+
+const SC=[
+ {id:"normal",name:"Normal",why:"Healthy fleet. KL stays at the sampling-noise floor, entropy inside its band, volume flat. Any alert here is a false positive, which is why thresholds are calibrated on healthy history."},
+ {id:"fw",name:"New firmware bug",
+  w:(t,w)=>{w[IX.fw]=14*clamp(t/12)},racks:{fw:fromSet(HW_RACKS,1)},
+  why:"A <b>new subject line</b>, “NIC firmware checksum error”, grows to ~11% of tickets over 12 hours on ~15 racks that share a NIC model. The daily ticket count doesn't change, so <b>volume stays silent</b>. KL jumps because the template has no baseline mass, the table flags it <span class='new'>NEW</span>, and the rack spread says it's a hardware cohort, not one rack."},
+ {id:"slow",name:"Slow burn (bad drive batch)",
+  w:(t,w)=>{w[IX.smart]*=1+3*clamp(t/72)},racks:{smart:fromSet(BAD_BATCH,.8)},
+  why:"SMART reallocated-sector tickets creep from ~7% to ~23% of the mix over three days on 8 racks. No single hour looks wrong and volume barely moves. KL climbs steadily and eventually crosses the threshold; <b>the lag is the price of a conservative threshold</b>. Drag it lower to see the trade-off with false alarms."},
+ {id:"power",name:"Rack power event",
+  w:(t,w)=>{w[IX.unreach]+=55*clamp(t/3)},vol:t=>1+1.5*clamp(t/3),racks:{unreach:fromSet(DEAD,.9)},
+  why:"Racks 17 and 18 lose power: ping-timeout tickets flood in and volume rises ~2.5×. Every detector fires fast and entropy collapses; this is the easy case. Rack spread shows ~2 racks: one physical cause, not a fleet-wide software bug. Volume alerts alone give false comfort about the other scenarios."},
+ {id:"rollout",name:"Monitoring rollout ([MON2] prefix)",
+  prefix:t=>clamp(t/8),
+  why:"A monitoring-agent upgrade starts prefixing subjects with <code>[MON2]</code> over 8 hours. The fleet is fine, but every template looks new: <b>KL explodes, a false positive</b>. Tick “Strip [tags] in normalizer” and the alarm clears. Drift detection is only as good as its normalization, and it should also tell you when <i>ticketing tooling</i> changed."}
+];
+let cur=SC[0];
+
+function sampleTicket(w,tot,racksFn,pre){
+  let r=Math.random()*tot,i=0;while(i<w.length-1&&r>=w[i]){r-=w[i];i++}
+  const rack=racksFn&&racksFn[T[i].k]?racksFn[T[i].k]():R(RACKS);
+  let raw=T[i].f(host(rack));
+  if(pre&&Math.random()<pre)raw="[MON2] "+raw;
+  return {raw,tpl:normalize(raw),rack};
+}
+function genHour(abs,sc,tS){
+  const w=T.map(t=>t.w);if(sc.w)sc.w(tS,w);
+  const tot=w.reduce((a,b)=>a+b,0);
+  const diur=1+.3*Math.sin(2*Math.PI*((abs%24)-8)/24);
+  const rate=125*diur*(sc.vol?sc.vol(tS):1);
+  const n=Math.max(15,Math.round(rate+Math.sqrt(rate)*gauss()));
+  const pre=sc.prefix?sc.prefix(tS):0,out=[];
+  for(let i=0;i<n;i++)out.push(sampleTicket(w,tot,sc.racks,pre));
+  return out;
+}
+
+/* ---- history, baseline, calibration ---- */
+let baseHours=[],calibHours=[],hours=[],tAbs=0;
+let baseMap,baseN,Hb,calib,thrAuto,hist,last=null;
+let thrUser=false,incStart=null,scStart=0,first={v:null,e:null,k:null},paused=false;
+const MAXPTS=168;
+
+function buildHistory(){
+  for(let h=0;h<14*24;h++)baseHours.push(genHour(h,SC[0],0));
+  for(let h=14*24;h<21*24;h++)calibHours.push(genHour(h,SC[0],0));
+  hours=calibHours.slice();tAbs=21*24;
+}
+const meanStd=a=>{const m=a.reduce((x,y)=>x+y,0)/a.length;return [m,Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)]};
+function evalWin(win){
+  const m=new Map();let N=0;
+  for(const h of win)for(const t of h){m.set(t.tpl,(m.get(t.tpl)||0)+1);N++}
+  const r=compareMaps(baseMap,baseN,m,N);r.N=N;return r;
+}
+function recalc(){
+  baseMap=new Map();baseN=0;
+  for(const h of baseHours)for(const t of h){baseMap.set(t.tpl,(baseMap.get(t.tpl)||0)+1);baseN++}
+  Hb=entH(baseMap,baseN);
+  const Hs=[],Ks=[],Vs=[];
+  for(let s=0;s+24<=calibHours.length;s+=3){const r=evalWin(calibHours.slice(s,s+24));Hs.push(r.H);Ks.push(r.KL);Vs.push(r.N)}
+  const [hm,hs]=meanStd(Hs),[vm,vs]=meanStd(Vs),[km]=meanStd(Ks);
+  calib={Hlo:hm-4*hs,Hhi:hm+4*hs,Vlo:vm-4*vs,Vhi:vm+4*vs,Km:km};
+  thrAuto=Math.round(Math.max(...Ks)*1.5*1000)/1000;
+  hist={H:[],K:[],V:[],start:tAbs-48};
+  for(let k=47;k>=0;k--){const L=hours.length,r=evalWin(hours.slice(L-24-k,L-k));hist.H.push(r.H);hist.K.push(r.KL);hist.V.push(r.N)}
+  if(!thrUser)setThr(thrAuto);
+}
+
+/* ---- live UI ---- */
+function setThr(v){$("#tThr").value=v;$("#tThrV").textContent=f(+v,3)+" b"}
+$("#tThr").oninput=e=>{thrUser=true;setThr(e.target.value);if(last)render(last)};
+$("#tThrAuto").onclick=()=>{thrUser=false;setThr(thrAuto);if(last)render(last)};
+$("#tPause").onclick=e=>{paused=!paused;e.target.textContent=paused?"Resume":"Pause"};
+function markScen(){document.querySelectorAll("#tScen button").forEach(b=>b.classList.toggle("on",b.dataset.id===cur.id))}
+function pickScen(s){cur=s;scStart=tAbs;incStart=s.id==="normal"?null:tAbs;first={v:null,e:null,k:null};markScen();render(last)}
+SC.forEach(s=>{const b=document.createElement("button");b.textContent=s.name;b.dataset.id=s.id;b.onclick=()=>pickScen(s);$("#tScen").appendChild(b)});
+
+function setStrip(v){
+  NORM.strip=v;document.querySelectorAll(".strip").forEach(c=>c.checked=v);
+  for(const arr of [baseHours,calibHours,hours])for(const h of arr)for(const t of h)t.tpl=normalize(t.raw);
+  recalc();first={v:null,e:null,k:null};
+  last=evalWin(hours.slice(-24));demo();byo();render(last);
+}
+document.querySelectorAll(".strip").forEach(c=>c.onchange=e=>setStrip(e.target.checked));
+
+function step(){
+  hours.push(genHour(tAbs,cur,tAbs-scStart));if(hours.length>400)hours.shift();
+  const r=evalWin(hours.slice(-24));
+  hist.H.push(r.H);hist.K.push(r.KL);hist.V.push(r.N);
+  if(hist.H.length>MAXPTS){hist.H.shift();hist.K.shift();hist.V.shift();hist.start++}
+  if(incStart!=null){
+    const lag=tAbs-incStart;
+    if((r.N<calib.Vlo||r.N>calib.Vhi)&&first.v==null)first.v=lag;
+    if((r.H<calib.Hlo||r.H>calib.Hhi)&&first.e==null)first.e=lag;
+    if(r.KL>+$("#tThr").value&&first.k==null)first.k=lag;
+  }
+  tAbs++;
+  return r;
+}
+function badge(id,title,val,alert,lag){
+  const txt=incStart==null?"no incident injected":lag!=null?`first alert +${lag} h after start`:`silent so far (+${tAbs-incStart} h)`;
+  $(id).innerHTML=`<small>${title}</small><strong>${val}</strong><span class="pill ${alert?"bad":"ok"}">${alert?"ALERT":"OK"}</span><div class="lag">${txt}</div>`;
+}
+function spreadLabel(win,tpl){
+  const c=new Array(RACKS).fill(0);let n=0;
+  for(const h of win)for(const t of h)if(t.tpl===tpl){c[t.rack]++;n++}
+  if(n<12)return "<span class='loc' style='color:var(--dim)'>too few tickets</span>";
+  let H=0;for(const v of c)if(v){const p=v/n;H-=p*log2(p)}
+  const e=Math.pow(2,H);
+  const [lab,col]=e<6?["localized","var(--bad)"]:e<22?["cohort","var(--accent)"]:["fleet-wide","var(--ok)"];
+  return `<span class="loc" style="color:${col}">${e.toFixed(1)} racks · ${lab}</span>`;
+}
+function rowHtml(x,sp){
+  return `<div class="trow"><span class="t" title="${esc(x.k)}">${x.novel?'<span class="new">NEW</span>':""}${esc(x.k)}</span><span class="n">${(x.pw*100).toFixed(1)}%</span><span class="n">${(x.qb*100).toFixed(1)}%</span><span class="n" style="color:${x.term>.01?"var(--bad)":"var(--dim)"}">${x.term>=0?"+":""}${f(x.term)}</span><span class="sp">${sp}</span></div>`;
+}
+function render(r){
+  if(!r)return;
+  const thr=+$("#tThr").value;
+  badge("#tdVol","Ticket volume (24 h)",r.N.toLocaleString(),r.N<calib.Vlo||r.N>calib.Vhi,first.v);
+  badge("#tdEnt","Template entropy H",f(r.H)+" b",r.H<calib.Hlo||r.H>calib.Hhi,first.e);
+  badge("#tdKL","KL divergence D(P‖Q)",f(r.KL)+" b",r.KL>thr,first.k);
+  $("#tClock").textContent=`Day ${Math.floor(tAbs/24)+1}, ${String(tAbs%24).padStart(2,"0")}:00 · baseline H = ${f(Hb)} b · healthy KL ≈ ${f(calib.Km)} b`;
+  $("#tExplain").innerHTML=`<b>${cur.name}.</b> ${cur.why}`;
+  const win=hours.slice(-24);
+  $("#tContrib").innerHTML=r.rows.slice().sort((x,y)=>y.term-x.term).slice(0,8).map(x=>rowHtml(x,spreadLabel(win,x.k))).join("");
+  $("#tFeed").innerHTML=hours[hours.length-1].slice(-12).reverse().map(t=>`<div>${baseMap.has(t.tpl)?"":'<span class="new">NEW</span>'}${esc(t.raw)}<span class="tp">  → ${esc(t.tpl)}</span></div>`).join("");
+  draw($("#tcV"),hist.V,{color:"#4cc2ff",lo:calib.Vlo,hi:calib.Vhi,fmt:v=>Math.round(v)});
+  draw($("#tcE"),hist.H,{color:"#4cc2ff",lo:calib.Hlo,hi:calib.Hhi,fmt:v=>v.toFixed(2)});
+  draw($("#tcK"),hist.K,{color:"#c792ea",thr,zero:true,fmt:v=>v.toFixed(3)});
+}
+function draw(cv,data,o){
+  const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+  cv.width=w*dpr;cv.height=h*dpr;
+  const g=cv.getContext("2d");g.scale(dpr,dpr);
+  let lo=Math.min(...data,o.lo??Infinity,o.thr??Infinity),hi=Math.max(...data,o.hi??-Infinity,o.thr??-Infinity);
+  if(o.zero)lo=0;
+  const pad=(hi-lo)*.12||.01;if(!o.zero)lo-=pad;hi+=pad;
+  const L=52,Rr=8,Tp=8,B=16,W=w-L-Rr,Hh=h-Tp-B,y=v=>Tp+Hh-(v-lo)/(hi-lo)*Hh;
+  g.font="11px ui-monospace,monospace";g.fillStyle="#8b97a6";g.strokeStyle="#2b3440";g.lineWidth=1;
+  for(let i=0;i<=3;i++){const v=lo+(hi-lo)*i/3;g.beginPath();g.moveTo(L,y(v));g.lineTo(w-Rr,y(v));g.stroke();g.fillText(o.fmt(v),3,y(v)+4)}
+  if(o.lo!=null){g.fillStyle="rgba(61,220,151,.12)";g.fillRect(L,y(o.hi),W,y(o.lo)-y(o.hi))}
+  const X=abs=>L+W*(abs-hist.start)/(MAXPTS-1);
+  if(incStart!=null&&incStart>=hist.start){g.strokeStyle="#ff5c6c";g.setLineDash([4,4]);g.beginPath();g.moveTo(X(incStart),Tp);g.lineTo(X(incStart),h-B);g.stroke();g.setLineDash([])}
+  if(o.thr!=null){g.strokeStyle="#ffb454";g.setLineDash([5,4]);g.beginPath();g.moveTo(L,y(o.thr));g.lineTo(w-Rr,y(o.thr));g.stroke();g.setLineDash([])}
+  g.strokeStyle=o.color;g.lineWidth=2;g.beginPath();
+  data.forEach((v,i)=>{const x=X(hist.start+i);i?g.lineTo(x,y(v)):g.moveTo(x,y(v))});g.stroke();
+  g.fillStyle="#8b97a6";g.fillText("older",L,h-3);g.textAlign="right";g.fillText("now →",w-Rr,h-3);g.textAlign="left";
+}
+
+/* ---- normalizer demo ---- */
+let demoRaw=[];
+function demo(){
+  $("#nOut").textContent=normalize($("#nIn").value);
+  $("#nT").textContent=demoRaw.length;
+  $("#nR").textContent=new Set(demoRaw).size;
+  $("#nU").textContent=new Set(demoRaw.map(normalize)).size;
+}
+$("#nIn").oninput=demo;
+
+/* ---- bring your own tickets ---- */
+function byo(){
+  const lines=$("#byoIn").value.split("\n").map(s=>s.includes("\t")?s.slice(s.lastIndexOf("\t")+1):s).map(s=>s.trim()).filter(Boolean);
+  const pct=+$("#byoSplit").value;$("#byoSplitV").textContent=pct+"%";
+  if(lines.length<20){$("#byoM").innerHTML='<div class="note">Paste at least 20 subject lines (a few hundred or more works best).</div>';$("#byoT").innerHTML="";return}
+  const cut=Math.floor(lines.length*pct/100),tp=lines.map(normalize);
+  const bm=countMap(tp.slice(0,cut)),wm=countMap(tp.slice(cut));
+  const bN=cut,wN=lines.length-cut,r=compareMaps(bm,bN,wm,wN);
+  const novel=r.rows.filter(x=>x.novel).length;
+  $("#byoM").innerHTML=[
+    ["Tickets (base / recent)",`${bN} / ${wN}`],["Templates",bm.size+(novel?` +${novel} new`:"")],
+    ["H baseline",f(entH(bm,bN))+" b"],["H recent",f(r.H)+" b"],["D(recent‖baseline)",f(r.KL)+" b"]
+  ].map(([a,b],i)=>`<div class="metric"><small>${a}</small><strong style="${i==4?"color:var(--kl)":""}">${b}</strong></div>`).join("");
+  $("#byoT").innerHTML=r.rows.sort((x,y)=>y.term-x.term).slice(0,10).map(x=>rowHtml(x,"")).join("");
+}
+$("#byoIn").oninput=byo;$("#byoSplit").oninput=byo;
+$("#byoSample").onclick=()=>{
+  const w0=T.map(t=>t.w),tot0=w0.reduce((a,b)=>a+b,0),out=[];
+  for(let i=0;i<1500;i++)out.push(sampleTicket(w0,tot0).raw);
+  for(let i=0;i<500;i++){const w=w0.slice();w[IX.fw]=14*clamp(i/150);out.push(sampleTicket(w,w.reduce((a,b)=>a+b,0)).raw)}
+  $("#byoIn").value=out.join("\n");byo();
+};
+
+/* ---- boot ---- */
+buildHistory();
+{const w0=T.map(t=>t.w),tot=w0.reduce((a,b)=>a+b,0);for(let i=0;i<400;i++)demoRaw.push(sampleTicket(w0,tot).raw)}
+recalc();
+last=evalWin(hours.slice(-24));
+demo();byo();render(last);
+setInterval(()=>{
+  if(paused)return;
+  let r;for(let i=0;i<+$("#tSpeed").value;i++)r=step();
+  last=r;render(r);
+},600);
+})();
+</script>
+
 </body>
 </html>

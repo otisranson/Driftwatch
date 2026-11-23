@@ -61,7 +61,7 @@ footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
 </head>
 <body>
 <main>
-<nav><a href="index.html">← Ticket drift detector</a></nav>
+<nav style="display:flex;gap:16px;flex-wrap:wrap"><a href="index.html">← Ticket drift detector</a><a href="directed.html">Next: directed information (which signal comes first) →</a></nav>
 <h1><span>Drift</span>watch · signal map</h1>
 <p class="lead">Tickets don't arrive alone. When a rack loses power you get <i>unreachable</i>, <i>PSU lost</i> and <i>fan critical</i> together; a failing drive brings <i>SMART warning</i> and <i>backup failed</i>. This page treats each normalized ticket subject as a <b>signal</b>, measures which signals co-occur on the same host in the same hour, and colours each relationship (edge) on a topographic scale — deep blue for weak, through green and yellow, to brown and white peaks for the strongest.</p>
 

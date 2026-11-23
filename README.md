@@ -1,8 +1,8 @@
 # Driftwatch
 
-Dependency-free HTML pages showing how **Shannon entropy**, **KL divergence**, **joint / conditional entropy** and **mutual information** can find problems in infrastructure telemetry. The focus is a large server fleet's **ticket subject lines**: catch the moment the signal starts to change, and see which signals move together.
+Dependency-free HTML pages showing how **Shannon entropy**, **KL divergence**, **joint / conditional entropy**, **mutual information** and **directed information** can find problems in infrastructure telemetry. The focus is a large server fleet's **ticket subject lines**: catch the moment the signal starts to change, and see which signals move together.
 
-**Live demo:** [ticket drift detector](https://otisranson.github.io/Driftwatch/) · [signal co-occurrence map](https://otisranson.github.io/Driftwatch/cooccurrence.html) · or just open the files in a browser (no build, no network).
+**Live demo:** [ticket drift detector](https://otisranson.github.io/Driftwatch/) · [signal co-occurrence map](https://otisranson.github.io/Driftwatch/cooccurrence.html) · [directed information map](https://otisranson.github.io/Driftwatch/directed.html) · or just open the files in a browser (no build, no network).
 
 ## Page 1 — `index.html`: ticket subject drift
 
@@ -60,6 +60,41 @@ After injecting a new hidden cause (NIC firmware bug), new warm edges appear aro
 Rows = X (given), columns = Y. The matrix is not symmetric, which is the point of conditional entropy. Rows and columns are ordered so related signals sit next to each other.
 
 Controls: switch measure, graph/matrix view, how many edges to show, toggle the hidden causes that generate the data, change the sample size (watch spurious edges appear at small N), resample, and set the baseline snapshot.
+
+## Page 3 — `directed.html`: directed information (which signal comes first)
+
+**Open it:** [live page](https://otisranson.github.io/Driftwatch/directed.html) · [source file](directed.html)
+
+Mutual information is symmetric, so it can't say whether `nic-flapping` leads to `unreachable` or the reverse. This page simulates **hourly time series per host**: hidden causes set off chains of signals with delays. It then estimates **directed information** with k hours of memory:
+
+DI(X→Y) ≈ I(X₍ₜ₋ₖ..ₜ₋₁₎ ; Yₜ | Y₍ₜ₋ₖ..ₜ₋₁₎)
+
+This is how much X's recent past predicts Y's next hour beyond Y's own past. It is the finite-memory directed-information rate, the same quantity as transfer entropy. Each estimate is bias-corrected and G-tested with a correction for testing every ordered pair.
+
+- **Graph of arrows** (earlier → later), matrix view, net flow DI(X→Y) − DI(Y→X), normalized DI, Δ DI vs baseline, and same-hour MI for contrast.
+- **Hover an arrow** for plain language: how many times the pattern happened, a rarity tag (very rare / rare / occasional / common / frequent), the rate per day across the fleet, a significance tag, how much more likely Y is after X, a delay profile by lag, and which direction dominates.
+- **Most upstream signals** table: where chains start, i.e. what to work first.
+- Experiments: toggle causes, inject a new NIC-firmware chain (Δ DI), add a **hidden confounder** to show that directed ≠ causal, change memory k and fleet size, and **reverse time** as a sanity check (chains flip; same-hour links don't).
+
+### Arrows, with plain-language hover
+![Directed information graph: arrows from earlier to later signals; hover panel for nic-flapping → unreachable says "Occasional, 254 times in 66,000 host-hours", significant, 28× more likely, one-way, peak delay +1h](screenshots/di-directed.png)
+
+Chains come out one-way: `disk-full → nginx-restart / backup-failed`, `memory-high → high-cpu → kubelet-restart`, `nic-flapping → unreachable → ntp-offset`. The panel says how often the pattern happened and how rare that is, whether it's distinguishable from noise, and at which delay it peaks.
+
+### Same-hour MI, for contrast
+![Same-hour MI graph: psu-lost, unreachable, ipmi-sensor and fan-critical tightly linked; hover says "No order in time"](screenshots/di-mi.png)
+
+Rack power loss hits `psu-lost`, `unreachable` and `ipmi-sensor` in the same hour. MI links them strongly, but directed information has no arrow between them, because hourly data can't say which came first.
+
+### Hidden confounder: directed ≠ causal
+![After adding a hidden nightly batch job, a false high-cpu → backup-failed arrow appears with a +2h delay](screenshots/di-confounder.png)
+
+A nightly batch job (not itself a signal) causes high CPU and, two hours later, failed backups. The map draws `high-cpu → backup-failed` even though neither causes the other.
+
+### Net-flow matrix
+![Antisymmetric net-flow matrix: warm cells where the row signal precedes the column signal](screenshots/di-matrix.png)
+
+Rows = earlier signal, columns = later signal. Warm = the row drives the column. Rows are ordered from the most upstream signal down.
 
 ## Notes
 

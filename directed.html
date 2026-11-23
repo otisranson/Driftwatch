@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Driftwatch — Directed Information Map</title>
+<style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--panel2:#1c232c;--line:#2b3440;--text:#d7dee7;--dim:#8b97a6;
+  --p:#4cc2ff;--accent:#ffb454;--ok:#3ddc97;--bad:#ff5c6c;--kl:#c792ea;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1020px;margin:0 auto;padding:24px 16px 80px}
+nav{font-size:13px;margin-bottom:6px;display:flex;gap:16px;flex-wrap:wrap}
+nav a{color:var(--p);text-decoration:none}
+h1{font-size:30px;margin:8px 0 4px;letter-spacing:-.5px}
+h1 span{color:var(--accent)}
+h2{font-size:21px;margin:0 0 6px}
+h3{font-size:15px;margin:14px 0 6px;color:var(--accent)}
+p{margin:6px 0}
+.lead{color:var(--dim);max-width:780px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin:22px 0}
+code,.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:13px}
+.formula{background:var(--panel2);border-left:3px solid var(--accent);padding:10px 14px;margin:10px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;overflow-x:auto;white-space:pre}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:1fr 1fr}
+@media(max-width:800px){.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.card b{color:var(--accent)}
+.note{color:var(--dim);font-size:13px}
+ul.note{padding-left:20px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.on{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}
+input[type=range]{accent-color:var(--p)}
+label.chk{display:flex;gap:6px;align-items:flex-start;font-size:13px;cursor:pointer}
+.sl{display:flex;align-items:center;gap:8px;font-size:13px;flex-wrap:wrap}
+canvas{width:100%;display:block;background:#11161d;border:1px solid var(--line);border-radius:8px;touch-action:manipulation}
+#cv{height:580px}
+@media(max-width:600px){#cv{height:460px}}
+.legend{margin:12px 0;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.legend .bar{height:16px;border-radius:4px;border:1px solid var(--line);margin:6px 0 2px}
+.legend .ticks{display:flex;justify-content:space-between;font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--dim)}
+.legend .ttl{font-weight:600}
+.two{display:grid;grid-template-columns:1.75fr 1fr;gap:14px;align-items:start}
+@media(max-width:860px){.two{grid-template-columns:1fr}}
+.det{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13px;min-height:220px}
+.det table{border-collapse:collapse;width:100%;margin-top:6px}
+.det td,.det th{padding:3px 6px;text-align:left;font-size:12.5px;border-bottom:1px solid var(--line)}
+.det td.n,.det th.n{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace}
+.det tr.hi td{color:var(--accent);font-weight:600}
+.det .ttl{font-size:14px;margin-bottom:4px}
+.det .ttl b{color:var(--accent)}
+.det p{margin:6px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;margin-right:6px;border:1px solid}
+.tag.vr{color:#ff9aa5;border-color:#ff5c6c;background:rgba(255,92,108,.12)}
+.tag.ra{color:#ffcf8a;border-color:#c8863a;background:rgba(255,180,84,.12)}
+.tag.oc{color:#e6d96a;border-color:#a99b3a;background:rgba(230,217,106,.10)}
+.tag.co{color:#9fe0b0;border-color:#3d9a63;background:rgba(61,220,151,.10)}
+.tag.fr{color:#8fd3ff;border-color:#2f7fb3;background:rgba(76,194,255,.12)}
+.tag.sig{color:#9fe0b0;border-color:#3d9a63;background:rgba(61,220,151,.10)}
+.tag.ns{color:#aab4c0;border-color:#4a5360;background:rgba(139,151,166,.10)}
+.lags{display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;align-items:center;margin:6px 0;font:12px ui-monospace,Menlo,Consolas,monospace}
+.lags .b{height:9px;border-radius:3px;background:var(--p);min-width:1px}
+.lags .b.pk{background:var(--accent)}
+.causes{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px 14px;margin:8px 0}
+.chain{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--dim)}
+table.top{border-collapse:collapse;width:100%;font-size:12.5px}
+table.top th,table.top td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
+table.top th{color:var(--dim);font-weight:600}
+table.top td.n,table.top th.n{text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace}
+.scroll{overflow-x:auto}
+footer{color:var(--dim);font-size:13px;text-align:center;margin-top:30px}
+</style>
+</head>
+<body>
+<main>
+<nav><a href="index.html">← Ticket drift detector</a><a href="cooccurrence.html">← Signal co-occurrence map</a></nav>
+<h1><span>Drift</span>watch · directed information</h1>
+<p class="lead">The <a href="cooccurrence.html" style="color:var(--p)">co-occurrence map</a> shows which signals belong together, but mutual information is symmetric: it can't tell you whether <i>nic-flapping</i> leads to <i>unreachable</i> or the other way round. <b>Directed information</b> adds time to the picture. It measures how much a signal's <i>past</i> predicts another signal's <i>next hour</i>, beyond what that signal's own past already predicts. The result is arrows: chains of signals that point back towards where a problem started.</p>
+
+<section>
+  <h2>1 · From “together” to “before”</h2>
+  <p class="note">Each signal is now a time series per host: X<sub>t</sub> = 1 if a ticket with that template fired on the host in hour t. Rather than one co-occurrence table, we ask how much a signal's <i>history</i> helps forecast another.</p>
+  <div class="grid g3">
+    <div class="card"><b>Directed information (Massey)</b>
+      <div class="formula">I(Xⁿ→Yⁿ) = Σᵢ I(Xⁱ ; Yᵢ | Yⁱ⁻¹)</div>
+      Information that flows from the X sequence into the Y sequence, accumulated causally: at each step, only X up to now may be used, and Y's own past is already known. Unlike I(X;Y), <b>I(X→Y) ≠ I(Y→X)</b>.</div>
+    <div class="card"><b>What this page estimates</b>
+      <div class="formula">DI(X→Y) ≈ I(X₍ₜ₋ₖ..ₜ₋₁₎ ; Yₜ
+                  | Y₍ₜ₋ₖ..ₜ₋₁₎)</div>
+      The per-hour directed information rate with <b>k hours of memory</b> (equal to transfer entropy under that assumption). The same-hour X<sub>t</sub> is left out on purpose: same-hour coupling is what MI already measures, and it has no direction.</div>
+    <div class="card"><b>Net flow</b>
+      <div class="formula">F(X,Y) = DI(X→Y) − DI(Y→X)</div>
+      Which way the information mostly runs. Positive = X tends to come first. A big DI in both directions means a feedback loop, or a shared cause that hits both at different moments.</div>
+  </div>
+  <p class="note" style="margin-top:10px">Values are tiny per host-hour, so they're shown in <b>millibits</b> (1 mbit = 0.001 bit). Each estimate is bias-corrected and tested (G-test, corrected for testing every ordered pair), so a hover can say both <i>how often</i> the pattern was seen and <i>whether it's distinguishable from noise</i>.</p>
+</section>
+
+<section>
+  <h2>2 · The map</h2>
+  <p class="note">Simulated fleet: every host produces an hourly series per signal. Hidden <i>causes</i> set off signals in a fixed order with delays (listed in section 3), on top of independent background noise. The estimator never sees the causes or the delays; it works only from the ticket timelines.</p>
+
+  <div class="btns" id="metricBtns"></div>
+  <div class="btns">
+    <span class="note">View:</span>
+    <button id="vGraph" class="on">Graph</button><button id="vMatrix">Matrix</button>
+    <label class="sl">Edges shown (top %) <input id="topPct" type="range" min="3" max="100" value="100"><span id="topPctV" class="mono"></span></label>
+    <label class="chk"><input type="checkbox" id="hideNoise" checked> Hide edges that could be noise</label>
+  </div>
+
+  <div class="legend">
+    <div class="ttl" id="lgTitle"></div>
+    <div class="bar" id="lgBar"></div>
+    <div class="ticks"><span id="lgLo"></span><span id="lgMid"></span><span id="lgHi"></span></div>
+    <div class="note" id="lgDesc" style="margin-top:6px"></div>
+  </div>
+
+  <div class="two">
+    <div>
+      <canvas id="cv"></canvas>
+      <p class="note" id="hint" style="margin-top:6px"></p>
+    </div>
+    <div>
+      <div class="det" id="det"></div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:6px">
+    <div style="min-width:0"><h3>Strongest arrows (current measure)</h3><div id="topTbl" class="scroll"></div></div>
+    <div style="min-width:0"><h3>Most upstream signals: where chains start</h3><div id="upTbl" class="scroll"></div>
+      <p class="note">Upstream score = Σ significant DI out − Σ significant DI in. During an incident, start at the top of this list.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>3 · Experiment</h2>
+  <p class="note">Each hidden cause fires a chain of signals with delays (<code>+2h</code> = two hours after onset, <code>+1–2h</code> = jittered). Toggle causes, change the memory k, or shrink the fleet to see how much data it takes to resolve a direction.</p>
+  <div class="causes" id="causes"></div>
+  <div class="btns">
+    <label class="sl">Hosts <input id="nHosts" type="range" min="25" max="1000" step="25" value="400"><span id="nHostsV" class="mono"></span></label>
+    <label class="sl">Memory k (hours) <input id="kMem" type="range" min="1" max="4" step="1" value="3"><span id="kMemV" class="mono"></span></label>
+  </div>
+  <div class="btns">
+    <button id="resample">Resample (new random seed)</button>
+    <button id="setBase">Set baseline = current</button>
+    <button id="inject">Inject NIC-firmware cause → show Δ DI</button>
+    <button id="confound">Add a hidden confounder</button>
+    <label class="chk"><input type="checkbox" id="reverse"> Play time backwards (sanity check)</label>
+  </div>
+  <p class="note" id="expNote"></p>
+</section>
+
+<section>
+  <h2>4 · Reading it</h2>
+  <ul class="note">
+    <li><b>Arrows point downstream.</b> <i>nic-flapping → unreachable → …</i> means the first tends to precede the second. Follow arrows backwards to the most upstream signal; that's usually the ticket to work first.</li>
+    <li><b>Strong MI, no arrow = same-hour coupling.</b> Rack power loss sets off <i>psu-lost</i> and <i>unreachable</i> in the same hour. Switch to “Same-hour MI” and they're tightly linked; under directed information there's no arrow between them, because hourly data can't say which came first. Finer time bins would help.</li>
+    <li><b>Directed is not causal.</b> Press <i>Add a hidden confounder</i>: a nightly batch job (not itself a signal) causes high CPU, and two hours later failed backups. The map then draws <i>high-cpu → backup-failed</i> even though neither causes the other. Directed information measures predictive precedence. A hidden common cause with different delays produces arrows too.</li>
+    <li><b>Memory must cover the delay.</b> With k = 1, only one-hour delays are visible, so two- and three-hour links fade or vanish. Too much memory costs data: cells grow as 2<sup>2k+1</sup>, and weak links slip below the noise floor on small fleets.</li>
+    <li><b>Rare is not the same as weak.</b> The hover tells you how often a pattern was actually seen. A link seen only a dozen times can carry a big DI value and still be noise, which is why each edge also gets a significance tag.</li>
+    <li><b>Time-reversal check.</b> Reverse time and every chain should flip direction, while same-hour links stay put. An arrow that doesn't flip is a warning sign.</li>
+  </ul>
+</section>
+<footer>Driftwatch · MIT License · all simulated data; nothing leaves your browser</footer>
+</main>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const LN2=Math.LN2,log2=x=>Math.log(x)/LN2;
+const hh=p=>p>0?-p*log2(p):0;
+const fmt=(x,d=3)=>x.toFixed(d);
+const mb=v=>(v*1000).toFixed(v*1000>=10?1:2);   // bits → millibits text
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- signals & hidden causes (chains with delays) ---------- */
+const SIG=[
+ ["disk-full",.004],["unreachable",.003],["high-cpu",.003],["memory-high",.003],["smart-warning",.002],
+ ["cert-expiry",.003],["ntp-offset",.002],["psu-lost",.0008],["patch-missing",.004],["nginx-restart",.0015],
+ ["kubelet-restart",.0012],["fan-critical",.001],["ipmi-sensor",.0015],["backup-failed",.002],
+ ["kernel-panic",.0004],["nic-flapping",.002],["nic-fw-error",.0002]
+];
+const n=SIG.length,NAMES=SIG.map(s=>s[0]),IX=Object.fromEntries(NAMES.map((k,i)=>[k,i]));
+// target: [signal, probability, delay (h), jitter (h)]
+const CAUSES=[
+ {id:"power",  name:"Rack power loss",   p:.004,on:true, t:[["psu-lost",.85,0,0],["unreachable",.9,0,0],["ipmi-sensor",.5,0,0],["fan-critical",.3,1,1]]},
+ {id:"disk",   name:"Disk filling up",   p:.012,on:true, t:[["disk-full",.95,0,0],["nginx-restart",.3,1,1],["backup-failed",.6,2,1]]},
+ {id:"thermal",name:"Thermal / cooling", p:.006,on:true, t:[["fan-critical",.8,0,0],["ipmi-sensor",.7,0,0],["high-cpu",.5,1,1],["kernel-panic",.15,3,1]]},
+ {id:"net",    name:"Network fabric",    p:.008,on:true, t:[["nic-flapping",.85,0,0],["unreachable",.5,1,0],["ntp-offset",.4,2,1]]},
+ {id:"mem",    name:"Memory leak",       p:.008,on:true, t:[["memory-high",.9,0,0],["high-cpu",.45,1,0],["kubelet-restart",.5,2,1],["nginx-restart",.25,2,0]]},
+ {id:"drive",  name:"Failing drives",    p:.005,on:true, t:[["smart-warning",.9,0,0],["backup-failed",.4,2,1],["disk-full",.25,3,1]]},
+ {id:"patch",  name:"Patch cycle",       p:.012,on:true, t:[["patch-missing",.9,0,0],["kubelet-restart",.2,1,1]]},
+ {id:"fw",     name:"NIC firmware bug (new)",p:.008,on:false,t:[["nic-fw-error",.9,0,0],["nic-flapping",.7,1,0],["unreachable",.35,2,0],["ntp-offset",.2,3,0]]},
+ {id:"batch",  name:"Nightly batch job (hidden confounder)",p:.01,on:false,t:[["high-cpu",.7,0,0],["backup-failed",.6,2,0]]}
+];
+CAUSES.forEach(c=>c.ti=c.t.map(([k,p,l,j])=>[IX[k],p,l,j]));
+
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ---------- state ---------- */
+const S={metric:"di",view:"graph",topPct:100,hosts:400,T:168,k:3,seed:11,hideNoise:true,reverse:false,hover:null,focus:null};
+const ZSIG=3.5;   // ≈ p < 0.05 after correcting for 272 ordered pairs
+let X=null,M=null,BASE=null,POS=[],order=[],edges=[],scale=null,matrixGeom=null;
+
+/* ---------- simulate hourly series per host ---------- */
+function simulate(){
+  const r=rng(S.seed),Hn=S.hosts,T=S.T,L=Hn*T;
+  X=SIG.map(()=>new Uint8Array(L));
+  for(let h=0;h<Hn;h++){
+    const o=h*T;
+    for(let t=0;t<T;t++){
+      for(let i=0;i<n;i++)if(r()<SIG[i][1])X[i][o+t]=1;
+      for(const c of CAUSES){
+        const fire=r()<c.p&&c.on;
+        for(const [i,p,l,j] of c.ti){const q=r(),u=r();   // constant RNG use, so toggles don't reshuffle the noise
+          if(fire&&q<p){const tt=t+l+Math.floor(u*(j+1));if(tt<T)X[i][o+tt]=1}}
+      }
+    }
+  }
+  if(S.reverse)for(const x of X)for(let h=0;h<Hn;h++)x.subarray(h*T,h*T+T).reverse();
+}
+
+/* ---------- directed information estimates ---------- */
+function zFromG(G,df){   // Wilson–Hilferty: chi-square(df) → standard normal
+  if(df<=0||G<=0)return 0;
+  const a=2/(9*df);return (Math.cbrt(G/df)-(1-a))/Math.sqrt(a);
+}
+function measures(){
+  const k=S.k,K=1<<k,Hn=S.hosts,T=S.T,L=Hn*T,NC=K*K*2;
+  // history codes: bit (l-1) = fired l hours ago
+  const HI=X.map(x=>{const a=new Uint8Array(L);for(let h=0;h<Hn;h++){const o=h*T;let c=0;for(let t=0;t<T;t++){a[o+t]=c;c=((c<<1)|x[o+t])&(K-1)}}return a});
+  const valid=[];for(let h=0;h<Hn;h++)for(let t=k;t<T;t++)valid.push(h*T+t);
+  const V=Int32Array.from(valid),Nv=V.length;
+  const cnt1=new Float64Array(n),act=[];
+  // per-target conditional entropy H(Y_t | Y past)
+  const HYc=new Float64Array(n);
+  for(let y=0;y<n;y++){
+    const c=new Float64Array(K*2),hy=HI[y],sy=X[y];
+    for(let p=0;p<Nv;p++){const q=V[p];c[hy[q]<<1|sy[q]]++}
+    let H=0;for(let s=0;s<K;s++){const a=c[s<<1],b=c[s<<1|1],m=a+b;if(m>0)H+=m/Nv*(hh(a/m)+hh(b/m))}
+    HYc[y]=H;cnt1[y]=c.reduce((s,v,ix)=>s+(ix&1?v:0),0);act[y]=cnt1[y]>=5;
+  }
+  const P=new Array(n*n);
+  const cnt=new Float64Array(NC);
+  for(let x=0;x<n;x++)for(let y=0;y<n;y++){
+    if(x===y||!act[x]||!act[y]){P[x*n+y]=null;continue}
+    cnt.fill(0);const hx=HI[x],hy=HI[y],sy=X[y];
+    for(let p=0;p<Nv;p++){const q=V[p];cnt[((hx[q]<<k)|hy[q])<<1|sy[q]]++}
+    let I=0,df=0,nf=0,nx=0,a00=0,a01=0,ax0=0,ax1=0;
+    for(let c=0;c<K;c++){
+      let nc=0,nc1=0,occA=0;
+      for(let a=0;a<K;a++){const b0=cnt[((a<<k)|c)<<1],b1=cnt[((a<<k)|c)<<1|1];nc+=b0+b1;nc1+=b1;if(b0+b1>0)occA++}
+      if(!nc)continue;
+      const occB=(nc1>0)+(nc-nc1>0);df+=Math.max(0,occA-1)*Math.max(0,occB-1);
+      for(let a=0;a<K;a++)for(let b=0;b<2;b++){
+        const nacb=cnt[((a<<k)|c)<<1|b];if(!nacb)continue;
+        const nac=cnt[((a<<k)|c)<<1]+cnt[((a<<k)|c)<<1|1],ncb=b?nc1:nc-nc1;
+        I+=nacb/Nv*log2(nacb*nc/(nac*ncb));
+      }
+    }
+    // plain-language counts
+    for(let a=0;a<K;a++)for(let c=0;c<K;c++){
+      const b0=cnt[((a<<k)|c)<<1],b1=cnt[((a<<k)|c)<<1|1];
+      if(a>0){nx+=b0+b1;nf+=b1}
+      if(c===0){if(a>0){ax0+=b0;ax1+=b1}else{a00+=b0;a01+=b1}}
+    }
+    I=Math.max(0,I);
+    const z=zFromG(2*Nv*LN2*I,df),bias=df/(2*Nv*LN2);
+    P[x*n+y]={raw:I,di:Math.max(0,I-bias),df,z,nf,nx,pAfter:ax1/(ax0+ax1||1),pQuiet:a01/(a00+a01||1),nAfterQuiet:ax0+ax1};
+  }
+  // same-hour MI (undirected), over the same valid hours
+  const MI=new Float64Array(n*n).fill(NaN),MIZ=new Float64Array(n*n),N11=new Float64Array(n*n);
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    if(!act[i]||!act[j])continue;
+    const xi=X[i],xj=X[j];let n11=0;
+    for(let p=0;p<Nv;p++){const q=V[p];n11+=xi[q]&xj[q]}
+    const n1x=cnt1[i],n1y=cnt1[j],n10=n1x-n11,n01=n1y-n11,n00=Nv-n1x-n1y+n11;
+    const Hx=hh(n1x/Nv)+hh(1-n1x/Nv),Hy=hh(n1y/Nv)+hh(1-n1y/Nv),Hxy=hh(n11/Nv)+hh(n10/Nv)+hh(n01/Nv)+hh(n00/Nv);
+    const I=Math.max(0,Hx+Hy-Hxy),z=zFromG(2*Nv*LN2*I,1);
+    MI[i*n+j]=MI[j*n+i]=Math.max(0,I-1/(2*Nv*LN2));MIZ[i*n+j]=MIZ[j*n+i]=z;N11[i*n+j]=N11[j*n+i]=n11;
+  }
+  // upstream score
+  const up=new Float64Array(n);
+  for(let x=0;x<n;x++)for(let y=0;y<n;y++){const e=P[x*n+y];if(e&&e.z>=ZSIG){up[x]+=e.di;up[y]-=e.di}}
+  M={Nv,cnt1,act,HYc,P,MI,MIZ,N11,up,k};
+}
+const DI=(i,j)=>{const e=M.P[i*n+j];return e?e.di:NaN};
+const SIGF=(i,j)=>{const e=M.P[i*n+j];return !!e&&e.z>=ZSIG};
+
+/* ---------- metrics ---------- */
+const METRICS={
+ di:{name:"Directed information X→Y",unit:"mbit/host-hour",dir:true,gamma:.5,get:DI,ok:SIGF,
+     desc:"How much X's last k hours improve the forecast of Y's next hour, beyond Y's own history. Arrows run X → Y and curve to the right, so a two-way pair shows two separate arrows."},
+ dinorm:{name:"Normalized DI",unit:"% of H(Y|Y past)",pct:true,dir:true,gamma:.5,get:(i,j)=>DI(i,j)/M.HYc[j],ok:SIGF,
+     desc:"Directed information divided by Y's remaining uncertainty given its own past: the share of what's left unpredictable about Y that X's history explains. Brings rare targets up to scale."},
+ net:{name:"Net flow DI(X→Y) − DI(Y→X)",unit:"mbit/host-hour",div:true,net:true,get:(i,j)=>DI(i,j)-DI(j,i),ok:(i,j)=>SIGF(i,j)||SIGF(j,i),
+     desc:"One arrow per pair, pointing the way information mostly flows. In the matrix, warm = row drives column, cool = column drives row."},
+ mi:{name:"Same-hour MI (no direction)",unit:"mbit/host-hour",sym:true,gamma:.5,get:(i,j)=>M.MI[i*n+j],ok:(i,j)=>M.MIZ[i*n+j]>=ZSIG,
+     desc:"Ordinary mutual information between signals in the same hour, for contrast. Links with strong MI but no directed arrow fire together and the hourly data can't order them."},
+ delta:{name:"Δ DI vs baseline",unit:"mbit/host-hour",dir:true,div:true,get:(i,j)=>DI(i,j)-(BASE?BASE.di[i*n+j]:0),ok:(i,j)=>SIGF(i,j)||(BASE&&BASE.z[i*n+j]>=ZSIG),
+     desc:"Change in directed information since the baseline snapshot. Warm arrows = new or stronger precedence, i.e. a new chain of events. Cool = a chain that went quiet."}
+};
+const METRIC_KEYS=Object.keys(METRICS);
+
+/* ---------- palettes ---------- */
+const HYPSO=[[0,"#1d4e89"],[.2,"#2a9d8f"],[.4,"#7cb342"],[.6,"#e6d96a"],[.8,"#c8863a"],[.9,"#8c4a2f"],[1,"#f4efe6"]];
+const DIV=[[0,"#2b6cb0"],[.35,"#6fb1d9"],[.5,"#e9e4d8"],[.65,"#e0a060"],[1,"#b4492b"]];
+const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function pal(stops,t){
+  t=Math.max(0,Math.min(1,t));
+  for(let k=1;k<stops.length;k++)if(t<=stops[k][0]){
+    const [t0,c0]=stops[k-1],[t1,c1]=stops[k],u=(t-t0)/(t1-t0||1),a=hex(c0),b=hex(c1);
+    return [0,1,2].map(i=>a[i]+(b[i]-a[i])*u);
+  }
+  return hex(stops[stops.length-1][1]);
+}
+const rgb=(c,a=1)=>`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const stopsFor=m=>m.div?DIV:HYPSO;
+const fmtM=(m,v)=>m.pct?(v*100).toFixed(1)+"%":(m.div&&v>0?"+":"")+mb(v);
+
+/* ---------- scale, edges ---------- */
+function computeScale(){
+  const m=METRICS[S.metric];let lo=Infinity,hi=-Infinity;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    if(i===j)continue;const v=m.get(i,j);if(!Number.isFinite(v))continue;
+    if(v<lo)lo=v;if(v>hi)hi=v;
+  }
+  if(!Number.isFinite(lo)){lo=0;hi=1}
+  if(m.div){const a=Math.max(Math.abs(lo),Math.abs(hi),1e-9);lo=-a;hi=a}else lo=0;
+  if(hi-lo<1e-12)hi=lo+1e-6;
+  const g=m.gamma||1;
+  scale={lo,hi,g,
+    t:v=>{if(m.div){const u=v/hi;return .5+.5*Math.sign(u)*Math.pow(Math.abs(u),.6)}return Math.pow(Math.max(0,(v-lo)/(hi-lo)),g)},
+    inv:t=>m.div?Math.sign(t-.5)*Math.pow(Math.abs(t-.5)*2,1/.6)*hi:lo+(hi-lo)*Math.pow(t,1/g),
+    strength:v=>m.div?Math.pow(Math.abs(v)/hi,.6):Math.pow(Math.max(0,(v-lo)/(hi-lo)),g)};
+}
+function computeEdges(){
+  const m=METRICS[S.metric],list=[];
+  const add=(a,b,v,type)=>{if(!Number.isFinite(v)||v===0)return;if(S.hideNoise&&!m.ok(a,b))return;
+    if(S.focus!=null&&a!==S.focus&&b!==S.focus)return;
+    list.push({a,b,v,type,t:scale.t(v),s:scale.strength(v)})};
+  if(m.sym){for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)add(i,j,m.get(i,j),"sym")}
+  else if(m.net){for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const v=m.get(i,j);if(!Number.isFinite(v))continue;v>=0?add(i,j,v,"net"):add(j,i,-v,"net")}}
+  else{for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j)add(i,j,m.get(i,j),"dir")}
+  list.sort((x,y)=>y.s-x.s);
+  edges=list.slice(0,Math.max(1,Math.round(list.length*S.topPct/100))).filter(e=>e.s>=.03);
+}
+
+/* ---------- layout ---------- */
+function layout(){
+  // attraction from DI in either direction plus same-hour MI, both normalized
+  const w=new Float64Array(n*n);let mx=1e-12;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+    if(i===j)continue;const a=M.P[i*n+j],b=M.P[j*n+i];
+    const d=Math.max(a?a.di/M.HYc[j]:0,b?b.di/M.HYc[i]:0),mi=M.MI[i*n+j];
+    const v=(d||0)+(Number.isFinite(mi)?mi/Math.min(hh(M.cnt1[i]/M.Nv)+hh(1-M.cnt1[i]/M.Nv),hh(M.cnt1[j]/M.Nv)+hh(1-M.cnt1[j]/M.Nv)):0);
+    w[i*n+j]=v;if(v>mx)mx=v;
+  }
+  const P=[];for(let i=0;i<n;i++){const a=2*Math.PI*i/n;P.push([.5+.35*Math.cos(a),.5+.35*Math.sin(a)])}
+  for(let it=0;it<500;it++){
+    const F=P.map(()=>[0,0]),cool=1-it/500;
+    for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+      let dx=P[i][0]-P[j][0],dy=P[i][1]-P[j][1],d2=dx*dx+dy*dy+1e-5,d=Math.sqrt(d2);
+      const rep=.0028/d2,att=Math.pow(w[i*n+j]/mx,.7)*d*1.4,f=rep-att;
+      dx/=d;dy/=d;F[i][0]+=dx*f;F[i][1]+=dy*f;F[j][0]-=dx*f;F[j][1]-=dy*f;
+    }
+    for(let i=0;i<n;i++){
+      F[i][0]-=(P[i][0]-.5)*.05;F[i][1]-=(P[i][1]-.5)*.05;
+      P[i][0]+=Math.max(-.02,Math.min(.02,F[i][0]*.5))*cool;P[i][1]+=Math.max(-.02,Math.min(.02,F[i][1]*.5))*cool;
+    }
+  }
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;P.forEach(p=>{x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1])});
+  POS=P.map(p=>[.08+.84*(p[0]-x0)/(x1-x0||1),.09+.83*(p[1]-y0)/(y1-y0||1)]);
+  // matrix order: most upstream first, then greedy by link weight
+  const act=[...Array(n).keys()].filter(i=>M.act[i]);
+  let cur=act.reduce((b,i)=>M.up[i]>M.up[b]?i:b,act[0]);
+  order=[cur];const left=new Set(act.filter(x=>x!==cur));
+  while(left.size){let best=-1,bs=-1;for(const k of left){const s=w[cur*n+k];if(s>bs){bs=s;best=k}}order.push(best);left.delete(best);cur=best}
+  for(let i=0;i<n;i++)if(!M.act[i])order.push(i);
+}
+
+/* ---------- drawing ---------- */
+const cv=$("#cv"),ctx=cv.getContext("2d");
+let W=0,H=0,dpr=1;
+function fit(){
+  dpr=window.devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;
+  cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+const px=p=>[p[0]*W,p[1]*H];
+function segDist(x,y,a,b){
+  const dx=b[0]-a[0],dy=b[1]-a[1],l2=dx*dx+dy*dy||1e-9;
+  let t=((x-a[0])*dx+(y-a[1])*dy)/l2;t=Math.max(0,Math.min(1,t));
+  return Math.hypot(x-(a[0]+t*dx),y-(a[1]+t*dy));
+}
+function nodeR(i){return Math.min(5+30*Math.sqrt(M.cnt1[i]/M.Nv),Math.max(9,W/26))}
+const qb=(a,c,b,t)=>[(1-t)*(1-t)*a[0]+2*(1-t)*t*c[0]+t*t*b[0],(1-t)*(1-t)*a[1]+2*(1-t)*t*c[1]+t*t*b[1]];
+function edgeGeom(e){
+  const a=px(POS[e.a]),b=px(POS[e.b]),dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy)||1;
+  const bend=e.type==="dir"?.16:0,c=[(a[0]+b[0])/2-dy/d*d*bend*-1,(a[1]+b[1])/2+dx/d*d*bend*-1];
+  // trim at node rims
+  const ra=nodeR(e.a)+2,rb=nodeR(e.b)+(e.type==="sym"?2:4);
+  let t0=0,t1=1;
+  for(let s=0;s<=1;s+=.005){const p=qb(a,c,b,s);if(Math.hypot(p[0]-a[0],p[1]-a[1])>=ra){t0=s;break}}
+  for(let s=1;s>=0;s-=.005){const p=qb(a,c,b,s);if(Math.hypot(p[0]-b[0],p[1]-b[1])>=rb){t1=s;break}}
+  const pts=[];for(let k=0;k<=24;k++)pts.push(qb(a,c,b,t0+(t1-t0)*k/24));
+  return pts;
+}
+function strokePts(pts){ctx.beginPath();ctx.moveTo(...pts[0]);for(let k=1;k<pts.length;k++)ctx.lineTo(...pts[k]);ctx.stroke()}
+function arrowHead(pts,size,color){
+  const p=pts[pts.length-1],q=pts[pts.length-3],ang=Math.atan2(p[1]-q[1],p[0]-q[0]);
+  ctx.beginPath();ctx.moveTo(p[0]+Math.cos(ang)*2,p[1]+Math.sin(ang)*2);
+  ctx.lineTo(p[0]-Math.cos(ang-.45)*size,p[1]-Math.sin(ang-.45)*size);
+  ctx.lineTo(p[0]-Math.cos(ang+.45)*size,p[1]-Math.sin(ang+.45)*size);ctx.closePath();
+  ctx.fillStyle="rgba(5,7,10,.9)";ctx.lineWidth=3;ctx.strokeStyle="rgba(5,7,10,.9)";ctx.stroke();
+  ctx.fillStyle=color;ctx.fill();
+}
+function drawGraph(){
+  const m=METRICS[S.metric],stops=stopsFor(m);
+  ctx.clearRect(0,0,W,H);ctx.fillStyle="#11161d";ctx.fillRect(0,0,W,H);
+  const hov=S.hover;
+  for(const e of edges.slice().reverse()){
+    const pts=e.pts=edgeGeom(e),lw=1.6+4.4*e.s,col=rgb(pal(stops,e.t));
+    const dim=hov&&hov.type==="node"&&e.a!==hov.i&&e.b!==hov.i;
+    ctx.globalAlpha=dim?.18:1;ctx.lineCap="round";
+    ctx.strokeStyle="rgba(5,7,10,.9)";ctx.lineWidth=lw+3;strokePts(pts);
+    ctx.strokeStyle=col;ctx.lineWidth=lw;strokePts(pts);
+    if(e.type!=="sym")arrowHead(pts,8+5*e.s,col);
+    if(hov&&hov.type==="edge"&&hov.e===e){ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.setLineDash([4,3]);strokePts(pts);ctx.setLineDash([])}
+    ctx.globalAlpha=1;
+  }
+  ctx.font="12px system-ui,sans-serif";ctx.textAlign="center";
+  const upMax=Math.max(1e-9,...M.up);
+  for(let i=0;i<n;i++){
+    const [x,y]=px(POS[i]),r=nodeR(i),on=M.act[i];
+    ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fillStyle=on?"#0d1117":"#20262e";ctx.fill();
+    if(on&&M.up[i]>0&&!m.sym){ctx.beginPath();ctx.arc(x,y,r*.55,0,7);ctx.fillStyle=`rgba(255,180,84,${.15+.75*M.up[i]/upMax})`;ctx.fill()}
+    const isH=hov&&hov.type==="node"&&hov.i===i,isF=S.focus===i;
+    ctx.lineWidth=isH||isF?3:1.6;ctx.strokeStyle=isF?"#ffb454":isH?"#fff":on?"rgba(215,222,231,.85)":"#4a5360";ctx.stroke();
+    const tw=ctx.measureText(NAMES[i]).width/2,lx=Math.max(tw+3,Math.min(W-tw-3,x));
+    ctx.lineWidth=3;ctx.strokeStyle="rgba(13,17,23,.9)";ctx.strokeText(NAMES[i],lx,y-r-5);
+    ctx.fillStyle=on?"#e8eef5":"#6b7684";ctx.fillText(NAMES[i],lx,y-r-5);
+  }
+}
+function drawMatrix(){
+  const m=METRICS[S.metric],stops=stopsFor(m);
+  ctx.clearRect(0,0,W,H);ctx.fillStyle="#11161d";ctx.fillRect(0,0,W,H);
+  const left=Math.min(110,W*.26),top=100,cs=Math.min((W-left-10)/n,(H-top-10)/n);
+  matrixGeom={left,top,cs};
+  ctx.font=(W<500?"10px":"11px")+" system-ui,sans-serif";
+  order.forEach((i,r)=>{
+    ctx.fillStyle=M.act[i]?"#c8d1dc":"#667";ctx.textAlign="right";ctx.fillText(NAMES[i],left-6,top+r*cs+cs/2+4);
+    ctx.save();ctx.translate(left+r*cs+cs/2,top-6);ctx.rotate(-Math.PI/3);ctx.textAlign="left";ctx.fillText(NAMES[i],0,0);ctx.restore();
+  });
+  ctx.fillStyle="#8b97a6";ctx.textAlign="left";
+  ctx.fillText(m.sym?"rows and columns: signals (same hour)":"row = X (earlier) · column = Y (later)",8,18);
+  order.forEach((i,r)=>order.forEach((j,c)=>{
+    const x=left+c*cs,y=top+r*cs;
+    if(i===j){ctx.fillStyle="#161b22";ctx.fillRect(x,y,cs-1,cs-1);return}
+    const v=m.get(i,j),ok=!S.hideNoise||m.ok(i,j);
+    ctx.fillStyle=Number.isFinite(v)?rgb(pal(stops,ok?scale.t(v):(m.div?.5:0)),ok?1:.35):"#1c232c";ctx.fillRect(x,y,cs-1,cs-1);
+  }));
+  const hv=S.hover;
+  if(hv&&hv.type==="cell"){ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.strokeRect(left+hv.c*cs,top+hv.r*cs,cs-1,cs-1)}
+}
+function legend(){
+  const m=METRICS[S.metric],stops=stopsFor(m);
+  const g=[];for(let k=0;k<=12;k++)g.push(rgb(pal(stops,k/12))+` ${k/12*100}%`);
+  $("#lgBar").style.background=`linear-gradient(90deg,${g.join(",")})`;
+  $("#lgTitle").textContent=m.name+(m.unit?` [${m.unit}]`:"");
+  $("#lgLo").textContent=fmtM(m,scale.inv(0));$("#lgMid").textContent=fmtM(m,scale.inv(.5));$("#lgHi").textContent=fmtM(m,scale.inv(1));
+  $("#lgDesc").innerHTML=m.desc+(S.view==="graph"?" Edge colour follows this scale (square-root stretched so weaker links stay visible); thicker = stronger."+(m.sym?"":" Amber node centres mark upstream signals."):"");
+}
+
+/* ---------- plain-language frequency ---------- */
+function rarity(count){
+  const f=count/M.Nv,perDay=count/((S.T-M.k)/24);
+  const every=f>0?Math.round(1/f).toLocaleString():"∞";
+  const rate=`about ${perDay>=10?Math.round(perDay):perDay.toFixed(1)} a day across ${S.hosts} hosts, or once every ${every} host-hours`;
+  if(count<15)return {cls:"vr",tag:"Very rare",line:`only ${count} time${count===1?"":"s"} in ${M.Nv.toLocaleString()} host-hours: too few to trust the strength figure`,rate};
+  if(f<1e-3)return {cls:"ra",tag:"Rare",line:`${count} times in ${M.Nv.toLocaleString()} host-hours`,rate};
+  if(f<5e-3)return {cls:"oc",tag:"Occasional",line:`${count} times in ${M.Nv.toLocaleString()} host-hours`,rate};
+  if(f<2e-2)return {cls:"co",tag:"Common",line:`${count.toLocaleString()} times in ${M.Nv.toLocaleString()} host-hours`,rate};
+  return {cls:"fr",tag:"Frequent",line:`${count.toLocaleString()} times in ${M.Nv.toLocaleString()} host-hours`,rate};
+}
+function confTag(z){
+  return z>=ZSIG?`<span class="tag sig">Significant</span><span class="note">z = ${z.toFixed(1)}, survives the all-pairs correction</span>`
+               :`<span class="tag ns">Could be noise</span><span class="note">z = ${z.toFixed(1)}, below the ${ZSIG} cut-off</span>`;
+}
+function lagProfile(a,b){
+  const k=M.k,T=S.T,Hn=S.hosts,xa=X[a],xb=X[b],rows=[];
+  const pb=M.cnt1[b]/M.Nv;
+  for(let l=1;l<=k;l++){
+    let nx=0,nxy=0;
+    for(let h=0;h<Hn;h++){const o=h*T;for(let t=k;t<T;t++)if(xa[o+t-l]){nx++;nxy+=xb[o+t]}}
+    rows.push({l,nx,nxy,lift:nx?(nxy/nx)/(pb||1):0});
+  }
+  return rows;
+}
+const pct=x=>(x*100).toFixed(x<.01?2:1)+"%";
+
+/* ---------- detail panels ---------- */
+function detailDir(a,b){
+  const e=M.P[a*n+b],r=M.P[b*n+a];
+  if(!e){$("#det").innerHTML='<span class="note">One of these signals is too rare to estimate.</span>';return}
+  const R=rarity(e.nf),A=NAMES[a],B=NAMES[b],lift=e.pAfter/(e.pQuiet||1e-9);
+  const lp=lagProfile(a,b),pk=lp.reduce((m,x)=>x.lift>m.lift?x:m,lp[0]),mxl=Math.max(1e-9,...lp.map(x=>x.lift));
+  const fwd=e.di,rev=r?r.di:0;
+  let dirTxt;
+  if(e.z<ZSIG&&(!r||r.z<ZSIG))dirTxt="No direction can be told apart from noise.";
+  else if(rev<=fwd*.1)dirTxt=`<b>One-way:</b> ${esc(A)} comes first; the reverse is ${rev>0?"negligible":"zero"}.`;
+  else if(fwd>=rev*3)dirTxt=`<b>Mostly this way</b> (${(fwd/rev).toFixed(1)}× stronger than ${esc(B)} → ${esc(A)}).`;
+  else if(rev>=fwd*3)dirTxt=`<b>Mostly the other way</b>: ${esc(B)} → ${esc(A)} is ${(rev/(fwd||1e-12)).toFixed(1)}× stronger.`;
+  else dirTxt=`<b>Both directions</b> (ratio ${(fwd/(rev||1e-12)).toFixed(1)}×): a feedback loop or a shared cause hitting both at different times.`;
+  const mi=M.MI[a*n+b],miStrong=M.MIZ[a*n+b]>=ZSIG;
+  const key=S.metric,row=(lab,v,k)=>`<tr class="${key===k?"hi":""}"><td>${lab}</td><td class="n">${v}</td></tr>`;
+  $("#det").innerHTML=`<div class="ttl"><b>${esc(A)}</b> → <b>${esc(B)}</b></div>
+  <p><span class="tag ${R.cls}">${R.tag}</span>This pattern (${esc(B)} within ${M.k} h after ${esc(A)}) happened <b>${R.line}</b>, ${R.rate}.</p>
+  <p>${confTag(e.z)}</p>
+  <p>When ${esc(A)} fired in the last ${M.k} h (and ${esc(B)} hadn't), ${esc(B)} followed <b>${pct(e.pAfter)}</b> of the time, vs <b>${pct(e.pQuiet)}</b> otherwise${e.pQuiet>0?` (<b>${lift>=10?Math.round(lift):lift.toFixed(1)}×</b> more likely)`:""}.</p>
+  <p>${dirTxt}</p>
+  <div class="note">Delay profile (lift of ${esc(B)} at each lag after ${esc(A)}):</div>
+  <div class="lags">${lp.map(x=>`<span>+${x.l}h</span><div class="b${x===pk&&x.lift>1.5?" pk":""}" style="width:${(x.lift/mxl*100).toFixed(1)}%"></div><span>${x.lift.toFixed(1)}×</span>`).join("")}</div>
+  ${miStrong&&e.z<ZSIG&&(!r||r.z<ZSIG)?`<p class="note">They <i>do</i> fire together in the same hour (MI ${mb(mi)} mbit). That's coupling without an order, which usually means a shared cause.</p>`:""}
+  <table>
+  ${row("DI "+esc(A)+" → "+esc(B),mb(fwd)+" mbit","di")}
+  ${row("DI "+esc(B)+" → "+esc(A),mb(rev)+" mbit","-")}
+  ${row("Net flow",(fwd-rev>0?"+":"")+mb(fwd-rev)+" mbit","net")}
+  ${row("Normalized DI",(fwd/M.HYc[b]*100).toFixed(2)+"%","dinorm")}
+  ${row("Same-hour MI",(Number.isFinite(mi)?mb(mi):"–")+" mbit","mi")}
+  ${BASE?row("Δ DI vs baseline",(fwd-BASE.di[a*n+b]>0?"+":"")+mb(fwd-BASE.di[a*n+b])+" mbit","delta"):""}
+  ${row("Raw estimate / bias removed",mb(e.raw)+" / "+mb(e.raw-fwd),"-")}
+  ${row("Hours with "+esc(A)+" in last "+M.k+" h",e.nx.toLocaleString(),"-")}
+  </table>`;
+}
+function detailSym(a,b){
+  const n11=M.N11[a*n+b],R=rarity(n11),A=NAMES[a],B=NAMES[b];
+  const pa=M.cnt1[a]/M.Nv,pb=M.cnt1[b]/M.Nv,lift=(n11/M.Nv)/(pa*pb||1);
+  const f=M.P[a*n+b],r=M.P[b*n+a];
+  $("#det").innerHTML=`<div class="ttl"><b>${esc(A)}</b> ↔ <b>${esc(B)}</b> <span class="note">same hour</span></div>
+  <p><span class="tag ${R.cls}">${R.tag}</span>Both fired in the same host-hour <b>${R.line}</b>, ${R.rate}.</p>
+  <p>${confTag(M.MIZ[a*n+b])}</p>
+  <p>That is <b>${lift>=10?Math.round(lift):lift.toFixed(1)}×</b> more often than chance. Given ${esc(A)}, ${esc(B)} fired ${pct(n11/(M.cnt1[a]||1))} of the time; given ${esc(B)}, ${esc(A)} fired ${pct(n11/(M.cnt1[b]||1))}.</p>
+  <p>Directed: ${esc(A)} → ${esc(B)} ${f?mb(f.di):"–"} mbit${f&&f.z>=ZSIG?" ✓":""} · ${esc(B)} → ${esc(A)} ${r?mb(r.di):"–"} mbit${r&&r.z>=ZSIG?" ✓":""}.
+  ${(!f||f.z<ZSIG)&&(!r||r.z<ZSIG)?" <b>No order in time</b>: coupled, but the hourly data can't say which comes first.":""}</p>
+  <table><tr class="hi"><td>Same-hour MI</td><td class="n">${mb(M.MI[a*n+b])} mbit</td></tr>
+  <tr><td>P(${esc(A)}) / P(${esc(B)})</td><td class="n">${pct(pa)} / ${pct(pb)}</td></tr></table>`;
+}
+function detailNode(i){
+  const R=rarity(M.cnt1[i]),ins=[],outs=[];
+  for(let j=0;j<n;j++){if(j===i)continue;const o=M.P[i*n+j],ii=M.P[j*n+i];if(o&&o.z>=ZSIG)outs.push([j,o.di]);if(ii&&ii.z>=ZSIG)ins.push([j,ii.di])}
+  outs.sort((a,b)=>b[1]-a[1]);ins.sort((a,b)=>b[1]-a[1]);
+  const li=(arr,arrow)=>arr.length?arr.slice(0,5).map(([j,v])=>`<tr><td>${arrow==="in"?esc(NAMES[j])+" → ●":"● → "+esc(NAMES[j])}</td><td class="n">${mb(v)}</td></tr>`).join(""):`<tr><td class="note" colspan="2">none significant</td></tr>`;
+  const u=M.up[i],role=u>1e-4?"upstream: tends to start chains":u<-1e-4?"downstream: tends to be a symptom":"neutral";
+  $("#det").innerHTML=`<div class="ttl"><b>${esc(NAMES[i])}</b></div>
+  <p><span class="tag ${R.cls}">${R.tag}</span>Fired <b>${R.line}</b>, ${R.rate}.</p>
+  <p>Upstream score <b class="mono">${u>0?"+":""}${mb(u)}</b> mbit: ${role}.</p>
+  <table><tr><th>Arrows in (what precedes it)</th><th class="n">mbit</th></tr>${li(ins,"in")}</table>
+  <table><tr><th>Arrows out (what follows it)</th><th class="n">mbit</th></tr>${li(outs,"out")}</table>
+  <p class="note">${S.focus===i?"Click again to show every signal.":"Click to show only this signal's arrows."}</p>`;
+}
+function tables(){
+  const m=METRICS[S.metric],top=edges.slice(0,10);
+  $("#topTbl").innerHTML=`<table class="top"><tr><th>Pair</th><th class="n">${m.pct?"%":"mbit"}</th><th class="n">seen</th><th>how often</th></tr>`+
+  (top.length?top.map(e=>{
+    const cnt=e.type==="sym"?M.N11[e.a*n+e.b]:(M.P[e.a*n+e.b]||{nf:0}).nf,R=rarity(cnt);
+    return `<tr><td>${esc(NAMES[e.a])} ${e.type==="sym"?"↔":"→"} ${esc(NAMES[e.b])}</td><td class="n">${fmtM(m,e.v)}</td><td class="n">${cnt.toLocaleString()}</td><td><span class="tag ${R.cls}">${R.tag}</span></td></tr>`}).join("")
+  :`<tr><td colspan="4" class="note">No edges pass the filter.</td></tr>`)+"</table>";
+  const ups=[...Array(n).keys()].filter(i=>M.act[i]).sort((a,b)=>M.up[b]-M.up[a]).slice(0,6);
+  $("#upTbl").innerHTML=`<table class="top"><tr><th>Signal</th><th class="n">upstream (mbit)</th><th class="n">arrows out / in</th></tr>`+
+    ups.map(i=>{let o=0,ii=0;for(let j=0;j<n;j++){if(SIGF(i,j))o++;if(SIGF(j,i))ii++}
+      return `<tr><td>${esc(NAMES[i])}</td><td class="n">${M.up[i]>0?"+":""}${mb(M.up[i])}</td><td class="n">${o} / ${ii}</td></tr>`}).join("")+"</table>";
+}
+
+/* ---------- interaction ---------- */
+function mouse(ev){const r=cv.getBoundingClientRect();return [ev.clientX-r.left,ev.clientY-r.top]}
+function pickGraph(x,y){
+  for(let i=0;i<n;i++){const p=px(POS[i]);if(Math.hypot(x-p[0],y-p[1])<=nodeR(i)+4)return {type:"node",i}}
+  let best=null,bd=8;
+  for(const e of edges){if(!e.pts)continue;for(let k=1;k<e.pts.length;k++){const d=segDist(x,y,e.pts[k-1],e.pts[k]);if(d<bd){bd=d;best=e}}}
+  return best?{type:"edge",e:best}:null;
+}
+function pickMatrix(x,y){
+  if(!matrixGeom)return null;const {left,top,cs}=matrixGeom,c=Math.floor((x-left)/cs),r=Math.floor((y-top)/cs);
+  return r>=0&&c>=0&&r<n&&c<n&&order[r]!==order[c]?{type:"cell",r,c}:null;
+}
+function showHover(h){
+  if(!h)return;
+  if(h.type==="node")detailNode(h.i);
+  else if(h.type==="edge")h.e.type==="sym"?detailSym(h.e.a,h.e.b):detailDir(h.e.a,h.e.b);
+  else{const i=order[h.r],j=order[h.c];METRICS[S.metric].sym?detailSym(i,j):detailDir(i,j)}
+}
+const same=(a,b)=>a===b||(a&&b&&a.type===b.type&&a.i===b.i&&a.e===b.e&&a.r===b.r&&a.c===b.c);
+cv.addEventListener("pointermove",ev=>{
+  const [x,y]=mouse(ev),h=S.view==="graph"?pickGraph(x,y):pickMatrix(x,y);
+  if(same(h,S.hover))return;S.hover=h;paint();showHover(h);
+});
+cv.addEventListener("pointerleave",ev=>{if(ev.pointerType==="mouse"){S.hover=null;paint()}});
+cv.addEventListener("click",ev=>{
+  const [x,y]=mouse(ev);
+  if(S.view!=="graph"){const h=pickMatrix(x,y);S.hover=h;paint();showHover(h);return}
+  const h=pickGraph(x,y);
+  if(h&&h.type==="node"&&M.act[h.i]){S.focus=S.focus===h.i?null:h.i;computeEdges();S.hover=h;paint();tables();showHover(h)}
+  else if(h){S.hover=h;paint();showHover(h)}
+});
+
+/* ---------- orchestration ---------- */
+const IDLE='<span class="note">Hover (or tap) an arrow to see how often that pattern happens, whether it\'s rare, and which way it runs. Hover a signal to see what precedes and follows it.</span>';
+function paint(){S.view==="graph"?drawGraph():drawMatrix()}
+function redraw(){
+  S.hover=null;$("#det").innerHTML=IDLE;
+  fit();computeScale();computeEdges();
+  paint();legend();tables();
+  const m=METRICS[S.metric];
+  $("#hint").textContent=S.view==="graph"
+    ?(m.sym?"Undirected same-hour links. Switch to a directed measure to see arrows.":"Arrows run from earlier signal to later signal. Click a node to isolate its arrows. Layout pulls linked signals together.")
+    :(m.sym?"Hover a cell. Symmetric: same-hour co-occurrence.":"Hover a cell: row X is the earlier signal, column Y the later one. Rows start from the most upstream signal.")+(S.hideNoise?" Faded cells could be noise.":"");
+}
+function expNote(){
+  const on=CAUSES.filter(c=>c.on).map(c=>c.id);
+  $("#expNote").innerHTML=`${(S.hosts*(S.T-S.k)).toLocaleString()} usable host-hours (${S.hosts} hosts × ${S.T} h, minus ${S.k} h warm-up each). `+
+    (S.reverse?"<b>Time is reversed</b>: chains should now point the other way. ":"")+
+    (on.includes("batch")?"<b>Confounder on</b>: look for high-cpu → backup-failed. ":"")+
+    (on.includes("fw")?"<b>NIC firmware bug on</b>. ":"");
+}
+function recompute(){simulate();measures();layout();redraw();expNote()}
+
+/* controls */
+METRIC_KEYS.forEach(k=>{const b=document.createElement("button");b.textContent=METRICS[k].name;b.dataset.k=k;b.onclick=()=>{S.metric=k;mark();redraw()};$("#metricBtns").appendChild(b)});
+function mark(){
+  document.querySelectorAll("#metricBtns button").forEach(b=>b.classList.toggle("on",b.dataset.k===S.metric));
+  $("#vGraph").classList.toggle("on",S.view==="graph");$("#vMatrix").classList.toggle("on",S.view==="matrix");
+}
+$("#vGraph").onclick=()=>{S.view="graph";mark();redraw()};
+$("#vMatrix").onclick=()=>{S.view="matrix";mark();redraw()};
+$("#topPct").oninput=e=>{S.topPct=+e.target.value;$("#topPctV").textContent=S.topPct+"%";redraw()};
+$("#hideNoise").onchange=e=>{S.hideNoise=e.target.checked;redraw()};
+$("#nHosts").onchange=e=>{S.hosts=+e.target.value;recompute()};
+$("#nHosts").oninput=e=>{$("#nHostsV").textContent=e.target.value};
+$("#kMem").oninput=e=>{S.k=+e.target.value;$("#kMemV").textContent=S.k+" h";recompute()};
+$("#resample").onclick=()=>{S.seed=Math.floor(Math.random()*1e9);recompute()};
+$("#setBase").onclick=()=>{snapBase();redraw()};
+$("#reverse").onchange=e=>{S.reverse=e.target.checked;recompute()};
+const IX_C=id=>CAUSES.findIndex(c=>c.id===id);
+$("#inject").onclick=()=>{snapBase();CAUSES[IX_C("fw")].on=true;syncCauses();S.metric="delta";mark();recompute()};
+$("#confound").onclick=()=>{CAUSES[IX_C("batch")].on=true;syncCauses();S.metric="di";mark();recompute();S.focus=null;
+  const h={type:"edge",e:edges.find(e=>e.a===IX["high-cpu"]&&e.b===IX["backup-failed"])};if(h.e){S.hover=h;paint();showHover(h)}};
+function snapBase(){BASE={di:Float64Array.from({length:n*n},(_,q)=>{const e=M.P[q];return e?e.di:0}),z:Float64Array.from({length:n*n},(_,q)=>{const e=M.P[q];return e?e.z:0})}}
+function syncCauses(){CAUSES.forEach(c=>{$("#cz_"+c.id).checked=c.on})}
+CAUSES.forEach(c=>{
+  const l=document.createElement("label");l.className="chk";
+  const chain=c.t.map(([k,p,lag,j])=>`${k} <span style="color:var(--p)">+${lag}${j?"–"+(lag+j):""}h</span>`).join(" · ");
+  l.innerHTML=`<input type="checkbox" id="cz_${c.id}" ${c.on?"checked":""}><span><b>${esc(c.name)}</b><br><span class="chain">${chain}</span></span>`;
+  l.querySelector("input").onchange=e=>{c.on=e.target.checked;recompute()};
+  $("#causes").appendChild(l);
+});
+$("#topPctV").textContent=S.topPct+"%";$("#nHostsV").textContent=S.hosts;$("#kMemV").textContent=S.k+" h";
+let rz=null;window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(()=>{if(M){fit();paint()}},60)});
+
+simulate();measures();snapBase();layout();mark();redraw();expNote();
+window.__dw={S,M:()=>M,redraw,recompute,showHover,edges:()=>edges,set:(k,v)=>{S[k]=v;mark();redraw()}};
+</script>
+</body>
+</html>
